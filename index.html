@@ -60,10 +60,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   <h3>Luz Global</h3>
   <label>Intensidad</label>
   <input type="range" id="global-intensidad" min="0" max="5" step="0.05" value="1">
-    <label>Color de prenda</label>
-  <input type="color" id="color-prenda" value="#ffffff" 
-    style="width:100%; height:28px; border:none; border-radius:6px; 
-           cursor:pointer; background:none; padding:0;">
+
+  <div id="color-section" style="display:none; margin-top:12px;">
+    <h3 id="color-titulo" style="margin:0 0 8px 0; font-size:11px; color:#888;
+      text-transform:uppercase; letter-spacing:1px; font-weight:600;
+      border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+      Colores
+    </h3>
+    <div id="color-swatches" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -124,18 +129,65 @@ document.getElementById('global-intensidad').addEventListener('input', (e) => {
   renderer.toneMappingExposure = 0.8 + v * 0.18;
 });
 
-const GEO_TARGETS = ['oversize_base_GEO', 'hoddie_GEO', 'BigW_base_GEO'];
+const GEO_TARGETS = [
+  'oversize_base_GEO', 'oversize_stitches_GEO',
+  'hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO',
+  'BigW_base_GEO'
+];
 
-document.getElementById('color-prenda').addEventListener('input', (e) => {
+const PALETAS = {
+  'Oversize_W': [
+    [13,13,13], [38,9,93], [24,20,17], [52,43,64]
+  ],
+  'BigW': [
+    [51,52,45], [55,52,52], [46,33,53], [43,43,54]
+  ],
+  'Hoddie_GRP': [
+    [23,26,100], [149,58,182], [13,13,13], [107,29,170]
+  ]
+};
+
+function aplicarColor(r, g, b) {
   if (!prendaActiva) return;
-  const color = new THREE.Color(e.target.value);
+  const color = new THREE.Color(r/255, g/255, b/255);
   prendaActiva.traverse((n) => {
     if (n.isMesh && GEO_TARGETS.includes(n.name)) {
       n.material.color.set(color);
       n.material.needsUpdate = true;
     }
   });
-});
+}
+
+function mostrarPaleta(clave) {
+  const section  = document.getElementById('color-section');
+  const titulo   = document.getElementById('color-titulo');
+  const swatches = document.getElementById('color-swatches');
+  const paleta   = PALETAS[clave];
+
+  if (!paleta) { section.style.display = 'none'; return; }
+
+  titulo.textContent = clave === 'Hoddie_GRP' ? 'Hoddie Colors'
+                     : clave === 'Oversize_W'  ? 'Oversize Colors'
+                     : 'BigW Colors';
+
+  swatches.innerHTML = '';
+  paleta.forEach(([r, g, b]) => {
+    const btn = document.createElement('div');
+    btn.style.cssText = `
+      width: 32px; height: 32px; border-radius: 6px;
+      background: rgb(${r},${g},${b});
+      cursor: pointer; border: 2px solid rgba(255,255,255,0.15);
+      transition: border-color 0.2s;
+    `;
+    btn.title = `rgb(${r}, ${g}, ${b})`;
+    btn.addEventListener('mouseenter', () => btn.style.borderColor = 'rgba(255,255,255,0.6)');
+    btn.addEventListener('mouseleave', () => btn.style.borderColor = 'rgba(255,255,255,0.15)');
+    btn.addEventListener('click', () => aplicarColor(r, g, b));
+    swatches.appendChild(btn);
+  });
+
+  section.style.display = 'block';
+}
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 const dracoLoader = new THREE.DRACOLoader();
@@ -154,14 +206,20 @@ let modoDetalle     = false;
 let lastTapTime     = 0;
 let lastTapObj      = null;
 let centroPrendaMundo = new THREE.Vector3();
+let posDestinoLocal = new THREE.Vector3(); // ← AGREGAR ESTA LÍNEA
 const hintEl        = document.getElementById('hint');
 
 // ── Animación easeInOut ───────────────────────────────────────────────────────
 function animarHacia(objeto, destino, duracion, onComplete, rotDestino) {
   const posInicio = objeto.position.clone();
-  const rotInicio = objeto.quaternion.clone();
-  const rotFin    = rotDestino ? rotDestino.clone() : objeto.quaternion.clone();
-  const startT    = performance.now();
+  const rotInicio = objeto.quaternion.clone().normalize();
+  const rotFin    = rotDestino ? rotDestino.clone().normalize() : rotInicio.clone();
+
+  if (rotInicio.dot(rotFin) < 0) {
+    rotFin.set(-rotFin.x, -rotFin.y, -rotFin.z, -rotFin.w);
+  }
+
+  const startT = performance.now();
   function step(now) {
     const t = Math.min((now - startT) / duracion, 1);
     const e = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
@@ -298,22 +356,23 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (animando) return;
 
   // ── Doble tap: regresar a posición original ───────────────────────────────
-  if (doble && modoDetalle && prendaActiva?.name === clave) {
-    animando = true;
-    controls.enabled = false;
-    hintEl.classList.remove('visible');
-
-// Guardar rotación original para resetearla al volver
-const rotOriginal = prendaActiva.quaternion.clone();
-
-animarHacia(prendaActiva, posOriginalLocal, 500, () => {
-  modoDetalle      = false;
-  animando         = false;
+if (doble && modoDetalle && prendaActiva?.name === clave) {
+  animando = true;
   controls.enabled = false;
-  prendaActiva     = null;
-}, rotOriginalLocal);
-    return;
-  }
+  hintEl.classList.remove('visible');
+
+  prendaActiva.quaternion.copy(rotOriginalLocal);
+  prendaActiva.position.copy(posDestinoLocal);
+
+  animarHacia(prendaActiva, posOriginalLocal, 500, () => {
+    modoDetalle      = false;
+    animando         = false;
+    controls.enabled = false;
+    prendaActiva     = null;
+    document.getElementById('color-section').style.display = 'none';
+  }, rotOriginalLocal);
+  return;
+}
 
   // ── Tap simple: llevar prenda al frente de la cámara ─────────────────────
   if (!modoDetalle) {
@@ -333,11 +392,9 @@ animarHacia(prendaActiva, destinoLocal, 700, () => {
   controls.enabled = false;
   hintEl.classList.add('visible');
 
-    prendaActiva.traverse((n) => {
-    if (n.isMesh && GEO_TARGETS.includes(n.name)) {
-      document.getElementById('color-prenda').value = '#' + n.material.color.getHexString();
-    }
-  });
+  mostrarPaleta(clave);
+
+  posDestinoLocal = prendaActiva.position.clone();
 
   const box = new THREE.Box3().setFromObject(prendaActiva);
   box.getCenter(centroPrendaMundo);
@@ -398,6 +455,8 @@ gltfLoader.load('Models/Hoddie.glb', (gltf) => {
       n.material.envMapIntensity = 0.3;
       n.material.envMap = scene.environment;
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      if (['hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO'].includes(n.name))
+  n.material.color.set(new THREE.Color(23/255, 26/255, 100/255));
       n.material.needsUpdate = true;
     }
   });
@@ -407,7 +466,6 @@ gltfLoader.load('Models/Oversize.glb', (gltf) => {
   const root = gltf.scene;
   scene.add(root);
   root.traverse((n) => {
-// DESPUÉS
     if (n.isMesh) {
       n.material = n.material.clone();
       n.material.metalness       = 0;
@@ -415,6 +473,8 @@ gltfLoader.load('Models/Oversize.glb', (gltf) => {
       n.material.envMapIntensity = 0.3;
       n.material.envMap = scene.environment;
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      if (['oversize_base_GEO', 'oversize_stitches_GEO'].includes(n.name))
+  n.material.color.set(new THREE.Color(13/255, 13/255, 13/255));
       n.material.needsUpdate = true;
     }
   });
@@ -425,12 +485,13 @@ gltfLoader.load('Models/BigW.glb', (gltf) => {
   scene.add(root);
   root.traverse((n) => {
     if (n.isMesh) {
-            n.material = n.material.clone();
+      n.material = n.material.clone();
       n.material.metalness       = 0;
       n.material.roughness       = 0.85;
       n.material.envMapIntensity = 0.3;
       n.material.envMap          = scene.environment;
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      if (n.name === 'BigW_base_GEO') n.material.color.set(new THREE.Color(51/255, 52/255, 45/255));
       n.material.needsUpdate     = true;
     }
   });
