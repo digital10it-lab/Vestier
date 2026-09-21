@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visor 3D</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
+
+#loading {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  color: #ddd; font-family: sans-serif; font-size: 16px;
+  text-align: center; pointer-events: none; z-index: 10;
+}
+
+#panel-derecho {
+  position: absolute; top: 16px; right: 16px;
+  background: rgba(15,15,15,0.88);
+  backdrop-filter: blur(8px);
+  color: #ccc; font-family: 'Segoe UI', sans-serif; font-size: 12px;
+  padding: 16px; border-radius: 12px; width: 180px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  z-index: 20;
+}
+#panel-derecho h3 {
+  margin: 0 0 8px 0; font-size: 11px; color: #888;
+  text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;
+}
+#panel-derecho label {
+  display: block; margin-top: 8px; margin-bottom: 4px;
+  color: #aaa; font-size: 11px;
+}
+#panel-derecho input[type="range"] {
+  width: 100%; accent-color: #fff; height: 3px; cursor: pointer;
+}
+
+#hint {
+  position: absolute; bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.55);
+  color: #ddd; font-family: 'Segoe UI', sans-serif; font-size: 12px;
+  padding: 6px 16px; border-radius: 20px;
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.4s;
+  z-index: 20;
+}
+#hint.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="loading">Cargando modelo…</div>
+<div id="hint">Doble tap para volver</div>
+
+<div id="panel-derecho">
+  <h3>Luz Global</h3>
+  <label>Intensidad</label>
+  <input type="range" id="global-intensidad" min="0" max="5" step="0.05" value="1">
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+
+<script>
+'use strict';
+
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.physicallyCorrectLights = true;
+renderer.outputEncoding  = THREE.sRGBEncoding;
+renderer.toneMapping     = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+renderer.domElement.style.touchAction = 'none';
+document.body.appendChild(renderer.domElement);
+
+// ── Escena ────────────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2b2b2b);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+scene.environment = pmrem.fromScene(new THREE.RoomEnvironment()).texture;
+pmrem.dispose();
+
+// ── Cámara ────────────────────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
+camera.name = 'CamaraPrincipal';
+camera.position.set(4, 3, 6);
+
+// ── Controles ─────────────────────────────────────────────────────────────────
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan     = false;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+controls.minAzimuthAngle = -Math.PI / 20;
+controls.maxAzimuthAngle =  Math.PI / 2;
+controls.maxPolarAngle   =  Math.PI / 2 - 0.05;
+controls.minPolarAngle   =  0.7;
+
+// ── Iluminación ───────────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const hemiLight    = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+scene.add(ambientLight, hemiLight);
+
+document.getElementById('global-intensidad').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  ambientLight.intensity       = v * 0.15;
+  hemiLight.intensity          = v * 0.2;
+  renderer.toneMappingExposure = 0.8 + v * 0.18;
+});
+
+// ── Loaders ───────────────────────────────────────────────────────────────────
+const dracoLoader = new THREE.DRACOLoader();
+dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+// ── Estado de prendas ─────────────────────────────────────────────────────────
+const PRENDAS = ['Hoddie_GRP', 'Oversize_W', 'BigW'];
+let prendaActiva    = null;
+let posOriginalLocal  = new THREE.Vector3();
+let rotOriginalLocal  = new THREE.Quaternion();
+let animando        = false;
+let modoDetalle     = false;
+let lastTapTime     = 0;
+let lastTapObj      = null;
+let centroPrendaMundo = new THREE.Vector3();
+const hintEl        = document.getElementById('hint');
+
+// ── Animación easeInOut ───────────────────────────────────────────────────────
+function animarHacia(objeto, destino, duracion, onComplete, rotDestino) {
+  const posInicio = objeto.position.clone();
+  const rotInicio = objeto.quaternion.clone();
+  const rotFin    = rotDestino ? rotDestino.clone() : objeto.quaternion.clone();
+  const startT    = performance.now();
+  function step(now) {
+    const t = Math.min((now - startT) / duracion, 1);
+    const e = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    objeto.position.lerpVectors(posInicio, destino, e);
+    THREE.Quaternion.slerp(rotInicio, rotFin, objeto.quaternion, e);
+    if (t < 1) requestAnimationFrame(step);
+    else if (onComplete) onComplete();
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Cálculo de destino corregido ──────────────────────────────────────────────
+//
+// Problema anterior: se movía el pivot del objeto sin tener en cuenta que
+// el centro visual (bounding box center) puede estar desplazado del pivot.
+//
+// Solución:
+//  1. Calculamos el centro real del bounding box en espacio mundo.
+//  2. Calculamos el offset entre el pivot y ese centro (constante durante la animación).
+//  3. Determinamos dónde queremos que aparezca el CENTRO visual, usando el FOV
+//     de la cámara para asegurar que la prenda quede bien encuadrada.
+//  4. El nuevo pivot = destinoCentro − offset, convertido al espacio del padre.
+//
+function getDestinoLocal(prenda) {
+  // 1. Forzar actualización de matrices antes de leer
+  prenda.updateWorldMatrix(true, true);
+
+  // 2. Bounding box en espacio mundo → centro y tamaño reales
+  const box = new THREE.Box3().setFromObject(prenda);
+  const centroMundo = box.getCenter(new THREE.Vector3());
+  const size        = box.getSize(new THREE.Vector3());
+  const maxDim      = Math.max(size.x, size.y, size.z);
+
+  // 3. Pivot actual en espacio mundo
+  const pivotMundo = new THREE.Vector3();
+  prenda.getWorldPosition(pivotMundo);
+
+  // 4. Offset pivot → centro (en espacio mundo, constante)
+  const offset = centroMundo.clone().sub(pivotMundo);
+
+  // 5. Distancia cámara-objeto para que la prenda llene ~65% de la pantalla
+  //    Usamos el FOV vertical: d = (alto / 2) / tan(fov/2)
+  //    "alto" = maxDim * factor_de_relleno
+  const fovRad    = camera.fov * Math.PI / 180;
+  const distancia = (maxDim * 1.5) / (2 * Math.tan(fovRad / 2));
+
+  // 6. Punto destino del CENTRO en espacio local de cámara (eje -Z = adelante)
+  //    Lo pasamos a espacio mundo con la matriz mundo de la cámara
+  camera.updateMatrixWorld();
+  const localCam          = new THREE.Vector3(0, 0, -distancia);
+  const destinoCentroMundo = localCam.applyMatrix4(camera.matrixWorld);
+
+  // 7. Nuevo pivot mundo = destinoCentro − offset
+  const nuevoPivotMundo = destinoCentroMundo.clone().sub(offset);
+
+  // 8. Convertir al espacio local del padre
+  const padre = prenda.parent;
+  if (padre && padre.type !== 'Scene') {
+    const inv = new THREE.Matrix4().copy(padre.matrixWorld).invert();
+    nuevoPivotMundo.applyMatrix4(inv);
+  }
+
+  return nuevoPivotMundo;
+}
+
+// ── Raycast ───────────────────────────────────────────────────────────────────
+const raycaster   = new THREE.Raycaster();
+const mouse       = new THREE.Vector2();
+let pointerStart    = { x: 0, y: 0 };
+let pointerDownTime = 0;
+let isDragging      = false;
+let lastPointerX    = 0;
+const ROT_SPEED     = 0.012;
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  pointerDownTime = Date.now();
+  pointerStart    = { x: e.clientX, y: e.clientY };
+  lastPointerX    = e.clientX;
+  isDragging      = false;
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!modoDetalle || !prendaActiva || animando) return;
+  if (e.pointerType === 'mouse' && !(e.buttons & 1)) return;
+
+  const dx = e.clientX - pointerStart.x;
+  if (!isDragging && Math.abs(dx) > 6) isDragging = true;
+
+if (isDragging) {
+  const delta = (e.clientX - lastPointerX) * ROT_SPEED;
+
+  // Rotar sobre el centro real de la prenda (no sobre su pivot)
+  const eje = new THREE.Vector3(0, 1, 0); // eje Y = gira de frente/espalda
+  const q   = new THREE.Quaternion().setFromAxisAngle(eje, delta);
+
+  // 1. Mover pivot al origen del centro
+  prendaActiva.position.sub(centroPrendaMundo);
+  // 2. Rotar posición
+  prendaActiva.position.applyQuaternion(q);
+  // 3. Rotar la orientación del objeto
+  prendaActiva.quaternion.premultiply(q);
+  // 4. Devolver al centro
+  prendaActiva.position.add(centroPrendaMundo);
+}
+  lastPointerX = e.clientX;
+});
+
+renderer.domElement.addEventListener('pointerup', (e) => {
+  const moved   = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+  const elapsed = Date.now() - pointerDownTime;
+  if (isDragging || moved > 10 || elapsed > 400) { isDragging = false; return; }
+  isDragging = false;
+
+  mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  if (!hits.length) return;
+
+  let nodo  = hits[0].object;
+  let clave = null;
+  while (nodo) {
+    if (PRENDAS.includes(nodo.name)) { clave = nodo.name; break; }
+    nodo = nodo.parent;
+  }
+  if (!clave) return;
+
+  const ahora = Date.now();
+  const doble = (clave === lastTapObj) && (ahora - lastTapTime < 500);
+  lastTapTime = ahora;
+  lastTapObj  = clave;
+
+  if (animando) return;
+
+  // ── Doble tap: regresar a posición original ───────────────────────────────
+  if (doble && modoDetalle && prendaActiva?.name === clave) {
+    animando = true;
+    controls.enabled = false;
+    hintEl.classList.remove('visible');
+
+// Guardar rotación original para resetearla al volver
+const rotOriginal = prendaActiva.quaternion.clone();
+
+animarHacia(prendaActiva, posOriginalLocal, 500, () => {
+  modoDetalle      = false;
+  animando         = false;
+  controls.enabled = false;
+  prendaActiva     = null;
+}, rotOriginalLocal);
+    return;
+  }
+
+  // ── Tap simple: llevar prenda al frente de la cámara ─────────────────────
+  if (!modoDetalle) {
+    scene.traverse((n) => { if (n.name === clave) prendaActiva = n; });
+    if (!prendaActiva) return;
+
+    posOriginalLocal.copy(prendaActiva.position);
+rotOriginalLocal.copy(prendaActiva.quaternion);
+    const destinoLocal = getDestinoLocal(prendaActiva);
+
+    modoDetalle      = true;
+    animando         = true;
+    controls.enabled = false;
+
+animarHacia(prendaActiva, destinoLocal, 700, () => {
+  animando         = false;
+  controls.enabled = false;
+  hintEl.classList.add('visible');
+  const box = new THREE.Box3().setFromObject(prendaActiva);
+  box.getCenter(centroPrendaMundo);
+});
+  }
+});
+
+// ── Cargar modelo ─────────────────────────────────────────────────────────────
+gltfLoader.load(
+  'Models/vestier.glb',
+  (gltf) => {
+    const root = gltf.scene;
+    scene.add(root);
+
+    console.log('=== Nodos del GLB ===');
+    root.traverse((n) => {
+      if (n.name) console.log(n.type, '→', n.name);
+    });
+
+    const box    = new THREE.Box3().setFromObject(root);
+    const center = box.getCenter(new THREE.Vector3());
+    const size   = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    controls.target.copy(center);
+    camera.near = maxDim / 20;
+    camera.far  = maxDim * 4;
+    camera.position.set(center.x, center.y, center.z + maxDim * 0.7);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+    controls.update();
+    controls.enabled = false;
+
+    document.getElementById('loading').style.display = 'none';
+  },
+  (xhr) => {
+    if (xhr.lengthComputable) {
+      const pct = Math.round((xhr.loaded / xhr.total) * 100);
+      document.getElementById('loading').textContent = `Cargando modelo… ${pct}%`;
+    }
+  },
+  (err) => {
+    console.error('[Room] Error:', err);
+    document.getElementById('loading').textContent =
+      'Error al cargar el modelo. Verifica la ruta Models/vestier.glb';
+  }
+);
+
+// REEMPLAZAR los dos gltfLoader.load de Hoddie y Oversize
+gltfLoader.load('Models/Hoddie.glb', (gltf) => {
+  const root = gltf.scene;
+  scene.add(root);
+  root.traverse((n) => {
+    if (n.isMesh) {
+      n.material.metalness  = 0;
+      n.material.roughness  = 0.85;
+      n.material.envMapIntensity = 0.3;
+      n.material.envMap = scene.environment;
+      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate = true;
+    }
+  });
+}, undefined, (err) => console.error('[Hoddie]', err));
+
+gltfLoader.load('Models/Oversize.glb', (gltf) => {
+  const root = gltf.scene;
+  scene.add(root);
+  root.traverse((n) => {
+    if (n.isMesh) {
+      n.material.envMap = scene.environment;
+      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate = true;
+    }
+  });
+}, undefined, (err) => console.error('[Oversize]', err));
+
+gltfLoader.load('Models/BigW.glb', (gltf) => {
+  const root = gltf.scene;
+  scene.add(root);
+  root.traverse((n) => {
+    if (n.isMesh) {
+      n.material.metalness       = 0;
+      n.material.roughness       = 0.85;
+      n.material.envMapIntensity = 0.3;
+      n.material.envMap          = scene.environment;
+      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate     = true;
+    }
+  });
+}, undefined, (err) => console.error('[BigW]', err));
+
+// ── Loop de render ────────────────────────────────────────────────────────────
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  camera.updateMatrixWorld();
+  renderer.render(scene, camera);
+})();
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
