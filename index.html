@@ -407,8 +407,12 @@ gltfLoader.load('Models/Oversize.glb', (gltf) => {
   const root = gltf.scene;
   scene.add(root);
   root.traverse((n) => {
+// DESPUÉS
     if (n.isMesh) {
-            n.material = n.material.clone();
+      n.material = n.material.clone();
+      n.material.metalness       = 0;
+      n.material.roughness       = 0.85;
+      n.material.envMapIntensity = 0.3;
       n.material.envMap = scene.environment;
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
       n.material.needsUpdate = true;
