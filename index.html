@@ -60,7 +60,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   <h3>Luz Global</h3>
   <label>Intensidad</label>
   <input type="range" id="global-intensidad" min="0" max="5" step="0.05" value="1">
-
+<label style="margin-top:14px;">HDRI</label>
+<select id="hdri-select" style="width:100%; background:#1a1a1a; color:#ccc;
+  border:1px solid rgba(255,255,255,0.12); border-radius:6px;
+  padding:4px 6px; font-size:11px; cursor:pointer;">
+  <option value="studio016">Studio 016</option>
+  <option value="studio017">Studio 017</option>
+  <option value="studio018">Studio 018</option>
+  <option value="countryclub">country club</option>
+</select>
+<label style="margin-top:8px; display:flex; align-items:center; gap:6px; cursor:pointer; color:#aaa; font-size:11px;">
+  <input type="checkbox" id="hdri-fondo">
+  HDRI como fondo
+</label>
   <div id="color-section" style="display:none; margin-top:12px;">
     <h3 id="color-titulo" style="margin:0 0 8px 0; font-size:11px; color:#888;
       text-transform:uppercase; letter-spacing:1px; font-weight:600;
@@ -76,6 +88,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
 
 <script>
@@ -96,11 +109,73 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2b2b2b);
 
+// POR esto:
 const pmrem = new THREE.PMREMGenerator(renderer);
 pmrem.compileEquirectangularShader();
-scene.environment = pmrem.fromScene(new THREE.RoomEnvironment()).texture;
-pmrem.dispose();
+let envTexture = null;
 
+// REEMPLAZA toda la función cargarHDRI y la declaración de bgTexture
+
+let bgTexture = null;
+
+function cargarHDRI(nombre) {
+  const loader = new THREE.RGBELoader().setPath('Hdri/');
+
+  loader.load(nombre + '.hdr', (hdr) => {
+    console.log('[HDRI env] cargado, tipo:', hdr.type, 'mapping:', hdr.mapping);
+    
+    if (envTexture) envTexture.dispose();
+    envTexture = pmrem.fromEquirectangular(hdr).texture;
+    hdr.dispose();
+    scene.environment = envTexture;
+
+    scene.traverse((n) => {
+      if (n.isMesh && n.material) {
+        n.material.envMap = envTexture;
+        n.material.needsUpdate = true;
+      }
+    });
+
+    loader.load(nombre + '.hdr', (hdr2) => {
+      console.log('[HDRI bg] segunda carga OK, tipo:', hdr2.type, 'mapping antes:', hdr2.mapping);
+      if (bgTexture) bgTexture.dispose();
+      hdr2.mapping = THREE.EquirectangularReflectionMapping;
+      console.log('[HDRI bg] mapping después:', hdr2.mapping, '— valor esperado:', THREE.EquirectangularReflectionMapping);
+
+
+bgTexture = hdr2;
+const fondoActivo = document.getElementById('hdri-fondo').checked;
+if (fondoActivo) {
+  scene.background = bgTexture;
+  scene.backgroundEncoding = THREE.LinearEncoding;
+} else {
+  scene.background = new THREE.Color(0x2b2b2b);
+}
+    },
+    undefined,
+    (err) => console.error('[HDRI bg] ERROR segunda carga:', err));
+
+  },
+  undefined,
+  (err) => console.error('[HDRI env] ERROR:', err));
+}
+cargarHDRI('studio016');
+
+document.getElementById('hdri-select').addEventListener('change', (e) => {
+  cargarHDRI(e.target.value);
+});
+
+// REEMPLAZA el listener del checkbox completo
+document.getElementById('hdri-fondo').addEventListener('change', (e) => {
+  if (e.target.checked && bgTexture) {
+    scene.background = bgTexture;
+    scene.backgroundEncoding = THREE.LinearEncoding;
+    if (vestierRoot) vestierRoot.visible = false;
+  } else {
+    scene.background = new THREE.Color(0x2b2b2b);
+    if (vestierRoot) vestierRoot.visible = true;
+  }
+});
 // ── Cámara ────────────────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
 camera.name = 'CamaraPrincipal';
@@ -127,12 +202,19 @@ document.getElementById('global-intensidad').addEventListener('input', (e) => {
   ambientLight.intensity       = v * 0.15;
   hemiLight.intensity          = v * 0.2;
   renderer.toneMappingExposure = 0.8 + v * 0.18;
+  // AGREGAR ESTO ↓
+  scene.traverse((n) => {
+    if (n.isMesh && n.material) {
+      n.material.envMapIntensity = v * 0.3;
+      n.material.needsUpdate = true;
+    }
+  });
 });
 
 const GEO_TARGETS = [
   'oversize_base_GEO', 'oversize_stitches_GEO',
   'hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO',
-  'BigW_base_GEO'
+  'BigW_base_GEO', 'BigW_stitches_M', 'BigW_stitchesButton_M'
 ];
 
 const PALETAS = {
@@ -191,12 +273,13 @@ function mostrarPaleta(clave) {
 
 // ── Loaders ───────────────────────────────────────────────────────────────────
 const dracoLoader = new THREE.DRACOLoader();
-dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
 
 const gltfLoader = new THREE.GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
 // ── Estado de prendas ─────────────────────────────────────────────────────────
+let vestierRoot = null;
 const PRENDAS = ['Hoddie_GRP', 'Oversize_W', 'BigW'];
 let prendaActiva    = null;
 let posOriginalLocal  = new THREE.Vector3();
@@ -224,7 +307,7 @@ function animarHacia(objeto, destino, duracion, onComplete, rotDestino) {
     const t = Math.min((now - startT) / duracion, 1);
     const e = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
     objeto.position.lerpVectors(posInicio, destino, e);
-    THREE.Quaternion.slerp(rotInicio, rotFin, objeto.quaternion, e);
+    objeto.quaternion.slerpQuaternions(rotInicio, rotFin, e);
     if (t < 1) requestAnimationFrame(step);
     else if (onComplete) onComplete();
   }
@@ -408,6 +491,7 @@ gltfLoader.load(
   (gltf) => {
     const root = gltf.scene;
     scene.add(root);
+      vestierRoot = root; // ← AGREGAR ESTA LÍNEA
 
     console.log('=== Nodos del GLB ===');
     root.traverse((n) => {
@@ -453,7 +537,7 @@ gltfLoader.load('Models/Hoddie.glb', (gltf) => {
       n.material.metalness  = 0;
       n.material.roughness  = 0.85;
       n.material.envMapIntensity = 0.3;
-      n.material.envMap = scene.environment;
+
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
       if (['hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO'].includes(n.name))
   n.material.color.set(new THREE.Color(23/255, 26/255, 100/255));
@@ -471,7 +555,7 @@ gltfLoader.load('Models/Oversize.glb', (gltf) => {
       n.material.metalness       = 0;
       n.material.roughness       = 0.85;
       n.material.envMapIntensity = 0.3;
-      n.material.envMap = scene.environment;
+     
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
       if (['oversize_base_GEO', 'oversize_stitches_GEO'].includes(n.name))
   n.material.color.set(new THREE.Color(13/255, 13/255, 13/255));
@@ -489,9 +573,10 @@ gltfLoader.load('Models/BigW.glb', (gltf) => {
       n.material.metalness       = 0;
       n.material.roughness       = 0.85;
       n.material.envMapIntensity = 0.3;
-      n.material.envMap          = scene.environment;
+     
       if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
-      if (n.name === 'BigW_base_GEO') n.material.color.set(new THREE.Color(51/255, 52/255, 45/255));
+      if (['BigW_base_GEO', 'BigW_stitches_M', 'BigW_stitchesButton_M'].includes(n.name))
+  n.material.color.set(new THREE.Color(51/255, 52/255, 45/255));
       n.material.needsUpdate     = true;
     }
   });
