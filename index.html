@@ -73,6 +73,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   <input type="checkbox" id="hdri-fondo">
   HDRI como fondo
 </label>
+<div id="fondo-ajustes" style="display:none; margin-top:4px;">
+  <label>Piso (altura)</label>
+  <input type="range" id="fondo-piso" min="-0.5" max="0.5" step="0.005" value="0">
+  <label>Radio del fondo</label>
+  <input type="range" id="fondo-radio" min="0.3" max="6" step="0.05" value="1.2">
+  <label>Rotación del fondo</label>
+  <input type="range" id="fondo-rot" min="0" max="360" step="1" value="0">
+</div>
+<div id="ao-section" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px;">
+  <h3 style="margin:0 0 8px 0; font-size:11px; color:#888;
+    text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+    Ambient Occlusion
+  </h3>
+  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:8px;">
+    <input type="checkbox" id="ao-toggle"> Activar AO
+  </label>
+  <label>Radius</label>
+  <input type="range" id="ao-radius" min="1" max="32" step="0.5" value="16">
+  <label>Intensidad</label>
+  <input type="range" id="ao-intensity" min="0.001" max="0.05" step="0.001" value="0.02">
+  <label>Samples</label>
+<input type="range" id="ao-samples" min="4" max="32" step="1" value="16">
+  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:6px;">
+    <input type="checkbox" id="ao-only"> AO Only
+  </label>
+</div>
   <div id="color-section" style="display:none; margin-top:12px;">
     <h3 id="color-titulo" style="margin:0 0 8px 0; font-size:11px; color:#888;
       text-transform:uppercase; letter-spacing:1px; font-weight:600;
@@ -90,7 +116,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
-
+<!-- DESPUÉS de los scripts que ya tienes -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SSAOShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
 <script>
 'use strict';
 
@@ -122,8 +155,6 @@ function cargarHDRI(nombre) {
   const loader = new THREE.RGBELoader().setPath('Hdri/');
 
   loader.load(nombre + '.hdr', (hdr) => {
-    console.log('[HDRI env] cargado, tipo:', hdr.type, 'mapping:', hdr.mapping);
-    
     if (envTexture) envTexture.dispose();
     envTexture = pmrem.fromEquirectangular(hdr).texture;
     hdr.dispose();
@@ -135,26 +166,6 @@ function cargarHDRI(nombre) {
         n.material.needsUpdate = true;
       }
     });
-
-    loader.load(nombre + '.hdr', (hdr2) => {
-      console.log('[HDRI bg] segunda carga OK, tipo:', hdr2.type, 'mapping antes:', hdr2.mapping);
-      if (bgTexture) bgTexture.dispose();
-      hdr2.mapping = THREE.EquirectangularReflectionMapping;
-      console.log('[HDRI bg] mapping después:', hdr2.mapping, '— valor esperado:', THREE.EquirectangularReflectionMapping);
-
-
-bgTexture = hdr2;
-const fondoActivo = document.getElementById('hdri-fondo').checked;
-if (fondoActivo) {
-  scene.background = bgTexture;
-  scene.backgroundEncoding = THREE.LinearEncoding;
-} else {
-  scene.background = new THREE.Color(0x2b2b2b);
-}
-    },
-    undefined,
-    (err) => console.error('[HDRI bg] ERROR segunda carga:', err));
-
   },
   undefined,
   (err) => console.error('[HDRI env] ERROR:', err));
@@ -166,15 +177,117 @@ document.getElementById('hdri-select').addEventListener('change', (e) => {
 });
 
 // REEMPLAZA el listener del checkbox completo
-document.getElementById('hdri-fondo').addEventListener('change', (e) => {
-  if (e.target.checked && bgTexture) {
-    scene.background = bgTexture;
-    scene.backgroundEncoding = THREE.LinearEncoding;
-    if (vestierRoot) vestierRoot.visible = false;
-  } else {
-    scene.background = new THREE.Color(0x2b2b2b);
-    if (vestierRoot) vestierRoot.visible = true;
+// ── Fondo: imagen Vestier_v001.png con proyección al piso ─────────────────────
+// La imagen es 4096x1024 y tiene el panorama repetido 2 veces,
+// por eso solo se usa la mitad (BG_REPEAT_X = 0.5). Si se ve cortado, pon 1.0
+const BG_IMAGE_PATH = 'Backgrounds/Vestier_v001.png';
+const BG_REPEAT_X   = 0.5;
+
+let fondoDome = null;
+const bgBase = { origin: new THREE.Vector3(), height: 1, maxDim: 1 };
+
+const fondoVertex = `
+  varying vec3 vDir;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vDir = wp.xyz - cameraPosition;
+    gl_Position = projectionMatrix * viewMatrix * wp;
   }
+`;
+
+const fondoFragment = `
+  uniform sampler2D map;
+  uniform vec3  uOrigin;
+  uniform float uHeight;
+  uniform float uRadius;
+  uniform float uRot;
+  uniform float uRepeat;
+  varying vec3 vDir;
+  const float PI = 3.14159265359;
+
+  void main() {
+    vec3 d   = normalize(vDir);
+    vec3 cam = cameraPosition - uOrigin;
+
+    float b    = dot(cam, d);
+    float c    = dot(cam, cam) - uRadius * uRadius;
+    float disc = b * b - c;
+
+    vec3 p = d;
+    if (disc > 0.0 && c < 0.0) {
+      float t = -b + sqrt(disc);
+      if (d.y < -0.0001) {
+        float tp = (-uHeight - cam.y) / d.y;
+        if (tp > 0.0) t = min(t, tp);
+      }
+      p = cam + t * d;
+    }
+    p = normalize(p);
+
+    float u = atan(p.z, p.x) / (2.0 * PI) + 0.5 + uRot;
+    float v = asin(clamp(p.y, -1.0, 1.0)) / PI + 0.5;
+    u = fract(u) * uRepeat;
+
+    gl_FragColor = vec4(texture2D(map, vec2(u, v)).rgb, 1.0);
+  }
+`;
+
+function crearFondoDome() {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      map:     { value: null },
+      uOrigin: { value: new THREE.Vector3() },
+      uHeight: { value: 1 },
+      uRadius: { value: 10 },
+      uRot:    { value: 0 },
+      uRepeat: { value: BG_REPEAT_X }
+    },
+    vertexShader:   fondoVertex,
+    fragmentShader: fondoFragment,
+    side: THREE.BackSide,
+    depthTest: false,
+    depthWrite: false
+  });
+
+  fondoDome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat);
+  fondoDome.frustumCulled = false;
+  fondoDome.renderOrder   = -1000;
+  fondoDome.visible       = false;
+  scene.add(fondoDome);
+
+  new THREE.TextureLoader().load(BG_IMAGE_PATH, (tex) => {
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    mat.uniforms.map.value = tex;
+  }, undefined, (err) => console.error('[Fondo] No se pudo cargar', BG_IMAGE_PATH, err));
+}
+crearFondoDome();
+
+function actualizarFondo() {
+  if (!fondoDome) return;
+  const u = fondoDome.material.uniforms;
+  const piso  = parseFloat(document.getElementById('fondo-piso').value);
+  const radio = parseFloat(document.getElementById('fondo-radio').value);
+  const rot   = parseFloat(document.getElementById('fondo-rot').value);
+
+  u.uOrigin.value.copy(bgBase.origin);
+  u.uHeight.value = Math.max(0.01, bgBase.height + piso * bgBase.maxDim);
+  u.uRadius.value = bgBase.maxDim * radio;
+  u.uRot.value    = rot / 360;
+}
+
+['fondo-piso', 'fondo-radio', 'fondo-rot'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', actualizarFondo);
+});
+
+document.getElementById('hdri-fondo').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  if (fondoDome)   fondoDome.visible   = on;
+  if (vestierRoot) vestierRoot.visible = !on;
+  document.getElementById('fondo-ajustes').style.display = on ? 'block' : 'none';
+  if (on) actualizarFondo();
 });
 // ── Cámara ────────────────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
@@ -204,7 +317,7 @@ document.getElementById('global-intensidad').addEventListener('input', (e) => {
   renderer.toneMappingExposure = 0.8 + v * 0.18;
   // AGREGAR ESTO ↓
   scene.traverse((n) => {
-    if (n.isMesh && n.material) {
+        if (n.isMesh && n.material && n !== fondoDome) {
       n.material.envMapIntensity = v * 0.3;
       n.material.needsUpdate = true;
     }
@@ -420,7 +533,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObjects(scene.children, true);
+    const hits = raycaster.intersectObjects(scene.children.filter(o => o !== fondoDome), true);
   if (!hits.length) return;
 
   let nodo  = hits[0].object;
@@ -486,46 +599,64 @@ animarHacia(prendaActiva, destinoLocal, 700, () => {
 });
 
 // ── Cargar modelo ─────────────────────────────────────────────────────────────
-gltfLoader.load(
-  'Models/vestier.glb',
-  (gltf) => {
-    const root = gltf.scene;
-    scene.add(root);
-      vestierRoot = root; // ← AGREGAR ESTA LÍNEA
+function onVestierLoad(gltf) {
+  const root = gltf.scene;
+  scene.add(root);
+  vestierRoot = root;
 
-    console.log('=== Nodos del GLB ===');
-    root.traverse((n) => {
-      if (n.name) console.log(n.type, '→', n.name);
-    });
+  console.log('=== Nodos del GLB ===');
+  root.traverse((n) => {
+    if (n.name) console.log(n.type, '→', n.name);
+  });
 
-    const box    = new THREE.Box3().setFromObject(root);
-    const center = box.getCenter(new THREE.Vector3());
-    const size   = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+  const box    = new THREE.Box3().setFromObject(root);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
 
-    controls.target.copy(center);
-    camera.near = maxDim / 20;
-    camera.far  = maxDim * 4;
-    camera.position.set(center.x, center.y, center.z + maxDim * 0.7);
-    camera.lookAt(center);
-    camera.updateProjectionMatrix();
-    controls.update();
-    controls.enabled = false;
+  controls.target.copy(center);
+  camera.near = maxDim / 20;
+  camera.far  = maxDim * 4;
+  camera.position.set(center.x, center.y, center.z + maxDim * 0.7);
+  camera.lookAt(center);
+  camera.updateProjectionMatrix();
+  controls.update();
+  controls.enabled = false;
 
-    document.getElementById('loading').style.display = 'none';
-  },
-  (xhr) => {
-    if (xhr.lengthComputable) {
-      const pct = Math.round((xhr.loaded / xhr.total) * 100);
-      document.getElementById('loading').textContent = `Cargando modelo… ${pct}%`;
-    }
-  },
-  (err) => {
-    console.error('[Room] Error:', err);
-    document.getElementById('loading').textContent =
-      'Error al cargar el modelo. Verifica la ruta Models/vestier.glb';
+  // Parámetros del fondo según el vestier
+  bgBase.origin.copy(center);
+  bgBase.height = Math.max(0.01, center.y - box.min.y);
+  bgBase.maxDim = maxDim;
+  if (fondoDome) fondoDome.scale.setScalar(maxDim * 2);
+  actualizarFondo();
+
+  document.getElementById('loading').style.display = 'none';
+
+  if (document.getElementById('hdri-fondo').checked) vestierRoot.visible = false;
+}
+
+function onVestierProgress(xhr) {
+  if (xhr.lengthComputable) {
+    const pct = Math.round((xhr.loaded / xhr.total) * 100);
+    document.getElementById('loading').textContent = `Cargando modelo… ${pct}%`;
   }
-);
+}
+
+function cargarVestier(intentos = 3) {
+  gltfLoader.load('Models/vestier.glb', onVestierLoad, onVestierProgress, (err) => {
+    if (intentos > 0) {
+      console.warn('Reintentando vestier.glb…', intentos);
+      document.getElementById('loading').textContent = 'Reintentando…';
+      setTimeout(() => cargarVestier(intentos - 1), 800);
+    } else {
+      console.error('[Room] Error:', err);
+      document.getElementById('loading').textContent =
+        'Error al cargar el modelo. Verifica la ruta Models/vestier.glb';
+    }
+  });
+}
+
+cargarVestier();
 
 // REEMPLAZAR los dos gltfLoader.load de Hoddie y Oversize
 gltfLoader.load('Models/Hoddie.glb', (gltf) => {
@@ -582,12 +713,56 @@ gltfLoader.load('Models/BigW.glb', (gltf) => {
   });
 }, undefined, (err) => console.error('[BigW]', err));
 
+// ── Post-processing / SSAO ────────────────────────────────────────────────────
+const composer = new THREE.EffectComposer(renderer);
+const renderPass = new THREE.RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const ssaoPass = new THREE.SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+ssaoPass.kernelRadius = 16;
+ssaoPass.minDistance  = 0.001;
+ssaoPass.maxDistance  = 0.02;   // ← MUY bajo para no oscurecer todo
+ssaoPass.output       = THREE.SSAOPass.OUTPUT.Default;
+ssaoPass.enabled      = false;
+composer.addPass(ssaoPass);
+
+let aoActivo = false;
+
+document.getElementById('ao-toggle').addEventListener('change', (e) => {
+  aoActivo = e.target.checked;
+  ssaoPass.enabled = aoActivo;
+});
+
+document.getElementById('ao-radius').addEventListener('input', (e) => {
+  ssaoPass.kernelRadius = parseFloat(e.target.value);
+});
+
+// Intensidad = maxDistance, rango muy fino
+document.getElementById('ao-intensity').addEventListener('input', (e) => {
+  ssaoPass.maxDistance = parseFloat(e.target.value);
+});
+
+document.getElementById('ao-samples').addEventListener('input', (e) => {
+  ssaoPass.kernelSize = parseInt(e.target.value);
+});
+
+document.getElementById('ao-only').addEventListener('change', (e) => {
+  ssaoPass.output = e.target.checked
+    ? THREE.SSAOPass.OUTPUT.SSAO
+    : THREE.SSAOPass.OUTPUT.Default;
+});
+
 // ── Loop de render ────────────────────────────────────────────────────────────
 (function animate() {
   requestAnimationFrame(animate);
   controls.update();
   camera.updateMatrixWorld();
-  renderer.render(scene, camera);
+  if (fondoDome) fondoDome.position.copy(camera.position);
+  if (aoActivo) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 })();
 
 // ── Responsive ────────────────────────────────────────────────────────────────
@@ -595,6 +770,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight); // ← AGREGAR
 });
 </script>
 </body>
