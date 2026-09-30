@@ -7,14 +7,12 @@
 <style>
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
-
 #loading {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%,-50%);
   color: #ddd; font-family: sans-serif; font-size: 16px;
   text-align: center; pointer-events: none; z-index: 10;
 }
-
 #panel-derecho {
   position: absolute; top: 16px; right: 16px;
   background: rgba(15,15,15,0.88);
@@ -37,7 +35,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
 #panel-derecho input[type="range"] {
   width: 100%; accent-color: #fff; height: 3px; cursor: pointer;
 }
-
 #hint {
   position: absolute; bottom: 24px; left: 50%;
   transform: translateX(-50%);
@@ -49,56 +46,59 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   z-index: 20;
 }
 #hint.visible { opacity: 1; }
+/* Canvas AO overlay encima del canvas 3D */
+#ao-canvas {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 5;
+  opacity: 1; display: none;
+  mix-blend-mode: multiply;   /* multiplica el gris AO sobre el color */
+}
 </style>
 </head>
 <body>
 
 <div id="loading">Cargando modelo…</div>
 <div id="hint">Doble tap para volver</div>
+<!-- Canvas 2D que recibe el mapa AO como overlay multiplicativo -->
+<canvas id="ao-canvas"></canvas>
 
 <div id="panel-derecho">
   <h3>Luz Global</h3>
   <label>Intensidad</label>
   <input type="range" id="global-intensidad" min="0" max="5" step="0.05" value="1">
-<label style="margin-top:14px;">HDRI</label>
-<select id="hdri-select" style="width:100%; background:#1a1a1a; color:#ccc;
-  border:1px solid rgba(255,255,255,0.12); border-radius:6px;
-  padding:4px 6px; font-size:11px; cursor:pointer;">
-  <option value="studio016">Studio 016</option>
-  <option value="studio017">Studio 017</option>
-  <option value="studio018">Studio 018</option>
-  <option value="countryclub">country club</option>
-</select>
-<label style="margin-top:8px; display:flex; align-items:center; gap:6px; cursor:pointer; color:#aaa; font-size:11px;">
-  <input type="checkbox" id="hdri-fondo">
-  HDRI como fondo
-</label>
-<div id="fondo-ajustes" style="display:none; margin-top:4px;">
-  <label>Piso (altura)</label>
-  <input type="range" id="fondo-piso" min="-0.5" max="0.5" step="0.005" value="0">
-  <label>Radio del fondo</label>
-  <input type="range" id="fondo-radio" min="0.3" max="6" step="0.05" value="1.2">
-  <label>Rotación del fondo</label>
-  <input type="range" id="fondo-rot" min="0" max="360" step="1" value="0">
-</div>
-<div id="ao-section" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px;">
-  <h3 style="margin:0 0 8px 0; font-size:11px; color:#888;
-    text-transform:uppercase; letter-spacing:1px; font-weight:600;">
-    Ambient Occlusion
-  </h3>
-  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:8px;">
-    <input type="checkbox" id="ao-toggle"> Activar AO
+
+  <label style="margin-top:14px;">HDRI</label>
+  <select id="hdri-select" style="width:100%; background:#1a1a1a; color:#ccc;
+    border:1px solid rgba(255,255,255,0.12); border-radius:6px;
+    padding:4px 6px; font-size:11px; cursor:pointer;">
+    <option value="studio016">Studio 016</option>
+    <option value="studio017">Studio 017</option>
+    <option value="studio018">Studio 018</option>
+    <option value="countryclub">country club</option>
+  </select>
+  <label style="margin-top:8px; display:flex; align-items:center; gap:6px; cursor:pointer; color:#aaa; font-size:11px;">
+    <input type="checkbox" id="hdri-fondo"> HDRI como fondo
   </label>
-  <label>Radius</label>
-  <input type="range" id="ao-radius" min="1" max="32" step="0.5" value="16">
-  <label>Intensidad</label>
-  <input type="range" id="ao-intensity" min="0.001" max="0.05" step="0.001" value="0.02">
-  <label>Samples</label>
-<input type="range" id="ao-samples" min="4" max="32" step="1" value="16">
-  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:6px;">
-    <input type="checkbox" id="ao-only"> AO Only
-  </label>
-</div>
+
+  <div id="ao-section" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px;">
+    <h3 style="margin:0 0 8px 0; font-size:11px; color:#888;
+      text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+      Ambient Occlusion
+    </h3>
+    <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:8px;">
+      <input type="checkbox" id="ao-toggle"> Activar AO
+    </label>
+    <label>Radius <span id="lbl-radius">6</span></label>
+    <input type="range" id="ao-radius" min="1" max="32" step="0.5" value="6">
+    <label>Intensidad <span id="lbl-intensity">1.0</span></label>
+    <input type="range" id="ao-intensity" min="0" max="3" step="0.05" value="1">
+    <label>Samples <span id="lbl-samples">16</span></label>
+    <input type="range" id="ao-samples" min="4" max="32" step="1" value="16">
+    <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:6px;">
+      <input type="checkbox" id="ao-only"> AO Only
+    </label>
+  </div>
+
   <div id="color-section" style="display:none; margin-top:12px;">
     <h3 id="color-titulo" style="margin:0 0 8px 0; font-size:11px; color:#888;
       text-transform:uppercase; letter-spacing:1px; font-weight:600;
@@ -116,18 +116,143 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
-<!-- DESPUÉS de los scripts que ya tienes -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SSAOShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
+
 <script>
 'use strict';
 
-// ── Renderer ──────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+//  SSAO  —  pipeline correcto para esta escena
+//
+//  El problema de la versión anterior:
+//    • el composite shader multiplicaba AO sobre TODA la escena
+//      (fondo + vestier + prendas), oscureciéndola completa.
+//    • El RT de escena perdía el tone-mapping ACES → resultado gris/oscuro.
+//
+//  Solución actual (2 pasos limpios):
+//    1. Render separado SOLO de las prendas → depth + normales en RT propio.
+//       El fondo y el vestier NO entran en ese RT → no reciben AO.
+//    2. Shader AO lee ese depth/normal y produce un mapa gris 0-1.
+//    3. Ese mapa se blitea en un <canvas> 2D con mix-blend-mode: multiply
+//       encima del canvas Three.js → no toca el pipeline de iluminación,
+//       no rompe el tone-mapping, no afecta el fondo.
+//    4. "AO Only": muestra solo el canvas AO con fondo blanco → gris limpio.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Shader AO ─────────────────────────────────────────────────────────────────
+//   Lee depth + normal reconstruidas, produce escala de grises 0(ocluido)–1(libre)
+const SSAO_VERT = `
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = vec4(position, 1.0); }
+`;
+
+const SSAO_FRAG = `
+  precision highp float;
+  uniform sampler2D tDepth;
+  uniform sampler2D tNormal;
+  uniform vec2  uSize;
+  uniform float uRadius;     // radio en unidades de vista (ajusta con la escena)
+  uniform float uBias;
+  uniform float uIntensity;  // 0-3
+  uniform int   uSamples;    // 4-32
+  uniform float cameraNear;
+  uniform float cameraFar;
+  uniform mat4  projMatrix;
+  uniform mat4  invProjMatrix;
+  varying vec2 vUv;
+
+  // ── Ruido ──────────────────────────────────────────────────────────────────
+  float rand(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+  // ── Profundidad lineal ─────────────────────────────────────────────────────
+  float linearDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * cameraNear * cameraFar) / (cameraFar + cameraNear - z * (cameraFar - cameraNear));
+  }
+
+  // ── Posición en espacio de vista ───────────────────────────────────────────
+  vec3 viewPos(vec2 uv) {
+    float d    = texture2D(tDepth, uv).r;
+    vec4  clip = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+    vec4  view = invProjMatrix * clip;
+    return view.xyz / view.w;
+  }
+
+  // ── Kernel hemisférico fijo de 32 muestras ─────────────────────────────────
+  const vec3 K[32] = vec3[32](
+    vec3(0.049, 0.008,0.154),vec3(-0.099,-0.178,0.067),
+    vec3(0.015, 0.287,0.143),vec3(-0.234, 0.105,0.110),
+    vec3(0.218,-0.162,0.077),vec3(-0.037, 0.349,0.183),
+    vec3(0.108, 0.027,0.386),vec3(-0.319,-0.082,0.179),
+    vec3(0.041, 0.423,0.220),vec3( 0.257,-0.337,0.162),
+    vec3(-0.148,0.079,0.554),vec3( 0.369, 0.189,0.240),
+    vec3(-0.083,-0.504,0.299),vec3(0.454, 0.044,0.296),
+    vec3(-0.182,0.524,0.358),vec3(0.022,-0.624,0.416),
+    vec3(0.582, 0.128,0.376),vec3(-0.314,-0.561,0.453),
+    vec3(0.156, 0.688,0.430),vec3(-0.638, 0.201,0.491),
+    vec3(0.395,-0.583,0.512),vec3(-0.073, 0.734,0.531),
+    vec3(0.691, 0.268,0.566),vec3(-0.481,-0.612,0.569),
+    vec3(0.228, 0.791,0.614),vec3(-0.742, 0.118,0.640),
+    vec3(0.534,-0.661,0.642),vec3(-0.123, 0.849,0.667),
+    vec3(0.798, 0.372,0.712),vec3(-0.609,-0.715,0.738),
+    vec3(0.282, 0.897,0.765),vec3(-0.826, 0.214,0.795)
+  );
+
+  void main() {
+    float d = texture2D(tDepth, vUv).r;
+
+    // Píxel sin geometría (fondo) → blanco = sin oclusión
+    if (d >= 0.9999) { gl_FragColor = vec4(1.0); return; }
+
+    vec3 norm = normalize(texture2D(tNormal, vUv).rgb * 2.0 - 1.0);
+    vec3 fpos = viewPos(vUv);
+
+    // Base TBN rotada con ruido por fragmento
+    float angle    = rand(vUv * 43.47) * 6.28318;
+    vec3  rvec     = vec3(cos(angle), sin(angle), 0.0);
+    vec3  tangent  = normalize(rvec - norm * dot(rvec, norm));
+    vec3  bitan    = cross(norm, tangent);
+    mat3  TBN      = mat3(tangent, bitan, norm);
+
+    float occ = 0.0;
+    for (int i = 0; i < 32; i++) {
+      if (i >= uSamples) break;
+
+      vec3 sp    = fpos + TBN * K[i] * uRadius;
+      vec4 off   = projMatrix * vec4(sp, 1.0);
+      off.xy    /= off.w;
+      off.xy     = off.xy * 0.5 + 0.5;
+
+      float sd   = linearDepth(texture2D(tDepth, off.xy).r);
+      float rck  = smoothstep(0.0, 1.0, uRadius / max(abs(fpos.z - sd), 0.001));
+      occ       += (sd >= sp.z + uBias ? 1.0 : 0.0) * rck;
+    }
+
+    float ao = 1.0 - clamp((occ / float(uSamples)) * uIntensity, 0.0, 1.0);
+    gl_FragColor = vec4(vec3(ao), 1.0);
+  }
+`;
+
+// ── Shader Blur 2-pass ────────────────────────────────────────────────────────
+const BLUR_FRAG = `
+  precision mediump float;
+  uniform sampler2D tAO;
+  uniform vec2 uSize;
+  uniform vec2 uDir;
+  varying vec2 vUv;
+  void main() {
+    vec2 t = 1.0 / uSize;
+    float w[5]; w[0]=0.0625;w[1]=0.25;w[2]=0.375;w[3]=0.25;w[4]=0.0625;
+    float r = 0.0;
+    for (int i = -2; i <= 2; i++)
+      r += texture2D(tAO, vUv + uDir * t * float(i)).r * w[i+2];
+    gl_FragColor = vec4(vec3(r), 1.0);
+  }
+`;
+const BLUR_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`;
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  RENDERER & ESCENA
+// ══════════════════════════════════════════════════════════════════════════════
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -138,639 +263,527 @@ renderer.toneMappingExposure = 0.8;
 renderer.domElement.style.touchAction = 'none';
 document.body.appendChild(renderer.domElement);
 
-// ── Escena ────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2b2b2b);
 
-// POR esto:
 const pmrem = new THREE.PMREMGenerator(renderer);
 pmrem.compileEquirectangularShader();
 let envTexture = null;
 
-// REEMPLAZA toda la función cargarHDRI y la declaración de bgTexture
-
-let bgTexture = null;
-
 function cargarHDRI(nombre) {
-  const loader = new THREE.RGBELoader().setPath('Hdri/');
-
-  loader.load(nombre + '.hdr', (hdr) => {
+  new THREE.RGBELoader().setPath('Hdri/').load(nombre + '.hdr', (hdr) => {
     if (envTexture) envTexture.dispose();
     envTexture = pmrem.fromEquirectangular(hdr).texture;
     hdr.dispose();
     scene.environment = envTexture;
-
-    scene.traverse((n) => {
-      if (n.isMesh && n.material) {
-        n.material.envMap = envTexture;
-        n.material.needsUpdate = true;
-      }
-    });
-  },
-  undefined,
-  (err) => console.error('[HDRI env] ERROR:', err));
+    scene.traverse(n => { if (n.isMesh && n.material) { n.material.envMap = envTexture; n.material.needsUpdate = true; }});
+  }, undefined, e => console.error('[HDRI]', e));
 }
 cargarHDRI('studio016');
+document.getElementById('hdri-select').addEventListener('change', e => cargarHDRI(e.target.value));
 
-document.getElementById('hdri-select').addEventListener('change', (e) => {
-  cargarHDRI(e.target.value);
-});
-
-// REEMPLAZA el listener del checkbox completo
-// ── Fondo: imagen Vestier_v001.png con proyección al piso ─────────────────────
-// La imagen es 4096x1024 y tiene el panorama repetido 2 veces,
-// por eso solo se usa la mitad (BG_REPEAT_X = 0.5). Si se ve cortado, pon 1.0
-const BG_IMAGE_PATH = 'Backgrounds/Vestier_v001.png';
-const BG_REPEAT_X   = 0.5;
-
-let fondoDome = null;
+// ── Fondo plano ───────────────────────────────────────────────────────────────
+const BG_IMAGE_PATH = 'Backgrounds/Vestier_v004.png';
+const BG_ASPECT = 1920 / 1080;
+let bgImgAspect = BG_ASPECT, camFovBase = 50, fondoDome = null;
 const bgBase = { origin: new THREE.Vector3(), height: 1, maxDim: 1 };
 
-const fondoVertex = `
-  varying vec3 vDir;
-  void main() {
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vDir = wp.xyz - cameraPosition;
-    gl_Position = projectionMatrix * viewMatrix * wp;
-  }
-`;
-
+const fondoVertex = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,1.0,1.0); }`;
 const fondoFragment = `
-  uniform sampler2D map;
-  uniform vec3  uOrigin;
-  uniform float uHeight;
-  uniform float uRadius;
-  uniform float uRot;
-  uniform float uRepeat;
-  varying vec3 vDir;
-  const float PI = 3.14159265359;
-
-  void main() {
-    vec3 d   = normalize(vDir);
-    vec3 cam = cameraPosition - uOrigin;
-
-    float b    = dot(cam, d);
-    float c    = dot(cam, cam) - uRadius * uRadius;
-    float disc = b * b - c;
-
-    vec3 p = d;
-    if (disc > 0.0 && c < 0.0) {
-      float t = -b + sqrt(disc);
-      if (d.y < -0.0001) {
-        float tp = (-uHeight - cam.y) / d.y;
-        if (tp > 0.0) t = min(t, tp);
-      }
-      p = cam + t * d;
-    }
-    p = normalize(p);
-
-    float u = atan(p.z, p.x) / (2.0 * PI) + 0.5 + uRot;
-    float v = asin(clamp(p.y, -1.0, 1.0)) / PI + 0.5;
-    u = fract(u) * uRepeat;
-
-    gl_FragColor = vec4(texture2D(map, vec2(u, v)).rgb, 1.0);
-  }
-`;
+  uniform sampler2D map; uniform float uScreenAspect,uImgAspect,uZoom; uniform vec2 uOffset;
+  varying vec2 vUv;
+  void main(){
+    vec2 uv=vUv-0.5;
+    if(uScreenAspect>uImgAspect) uv.y*=uImgAspect/uScreenAspect; else uv.x*=uScreenAspect/uImgAspect;
+    uv=uv/uZoom+0.5+uOffset;
+    gl_FragColor=vec4(texture2D(map,uv).rgb,1.0);
+  }`;
 
 function crearFondoDome() {
   const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      map:     { value: null },
-      uOrigin: { value: new THREE.Vector3() },
-      uHeight: { value: 1 },
-      uRadius: { value: 10 },
-      uRot:    { value: 0 },
-      uRepeat: { value: BG_REPEAT_X }
-    },
-    vertexShader:   fondoVertex,
-    fragmentShader: fondoFragment,
-    side: THREE.BackSide,
-    depthTest: false,
-    depthWrite: false
+    uniforms:{ map:{value:null}, uScreenAspect:{value:window.innerWidth/window.innerHeight},
+               uImgAspect:{value:BG_ASPECT}, uZoom:{value:1}, uOffset:{value:new THREE.Vector2(0,0)} },
+    vertexShader:fondoVertex, fragmentShader:fondoFragment, depthTest:false, depthWrite:false
   });
-
-  fondoDome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat);
-  fondoDome.frustumCulled = false;
-  fondoDome.renderOrder   = -1000;
-  fondoDome.visible       = false;
+  fondoDome = new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat);
+  fondoDome.frustumCulled=false; fondoDome.renderOrder=-1000; fondoDome.visible=false;
   scene.add(fondoDome);
-
-  new THREE.TextureLoader().load(BG_IMAGE_PATH, (tex) => {
-    tex.generateMipmaps = false;
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-    mat.uniforms.map.value = tex;
-  }, undefined, (err) => console.error('[Fondo] No se pudo cargar', BG_IMAGE_PATH, err));
+  new THREE.TextureLoader().load(BG_IMAGE_PATH, tex => {
+    tex.generateMipmaps=false; tex.minFilter=tex.magFilter=THREE.LinearFilter;
+    tex.wrapS=tex.wrapT=THREE.ClampToEdgeWrapping; mat.uniforms.map.value=tex;
+    if (tex.image?.width){ mat.uniforms.uImgAspect.value=tex.image.width/tex.image.height; bgImgAspect=mat.uniforms.uImgAspect.value; ajustarFovCamara(); }
+  }, undefined, e=>console.error('[Fondo]',e));
 }
 crearFondoDome();
 
 function actualizarFondo() {
   if (!fondoDome) return;
-  const u = fondoDome.material.uniforms;
-  const piso  = parseFloat(document.getElementById('fondo-piso').value);
-  const radio = parseFloat(document.getElementById('fondo-radio').value);
-  const rot   = parseFloat(document.getElementById('fondo-rot').value);
+  const u=fondoDome.material.uniforms;
+  u.uZoom.value=1; u.uOffset.value.set(0,0);
+  u.uScreenAspect.value=window.innerWidth/window.innerHeight;
+}
+window.addEventListener('resize', actualizarFondo);
+document.getElementById('hdri-fondo').addEventListener('change', e=>{
+  const on=e.target.checked;
+  if(fondoDome) fondoDome.visible=on;
+  if(vestierRoot) vestierRoot.visible=!on;
+  if(on) actualizarFondo();
+});
 
-  u.uOrigin.value.copy(bgBase.origin);
-  u.uHeight.value = Math.max(0.01, bgBase.height + piso * bgBase.maxDim);
-  u.uRadius.value = bgBase.maxDim * radio;
-  u.uRot.value    = rot / 360;
+// ── Cámara ────────────────────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 5000);
+camera.name='CamaraPrincipal'; camera.position.set(4,3,6);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.08; controls.enablePan=false;
+controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
+controls.minAzimuthAngle=-Math.PI/20; controls.maxAzimuthAngle=Math.PI/2;
+controls.maxPolarAngle=Math.PI/2-0.05; controls.minPolarAngle=0.7;
+
+function ajustarFovCamara(){
+  const sa=window.innerWidth/window.innerHeight;
+  const k=sa>bgImgAspect?bgImgAspect/sa:1;
+  camera.fov=2*Math.atan(Math.tan(camFovBase*Math.PI/360)*k)*180/Math.PI;
+  camera.aspect=sa; camera.updateProjectionMatrix();
 }
 
-['fondo-piso', 'fondo-radio', 'fondo-rot'].forEach((id) => {
-  document.getElementById(id).addEventListener('input', actualizarFondo);
+// ── Luces ──────────────────────────────────────────────────────────────────────
+const ambientLight=new THREE.AmbientLight(0xffffff,0.6);
+const hemiLight=new THREE.HemisphereLight(0xffffff,0x444444,0.8);
+scene.add(ambientLight,hemiLight);
+
+document.getElementById('global-intensidad').addEventListener('input', e=>{
+  const v=parseFloat(e.target.value);
+  ambientLight.intensity=v*0.15; hemiLight.intensity=v*0.2;
+  renderer.toneMappingExposure=0.8+v*0.18;
+  scene.traverse(n=>{ if(n.isMesh&&n.material&&n!==fondoDome){ n.material.envMapIntensity=v*0.3; n.material.needsUpdate=true; }});
 });
 
-document.getElementById('hdri-fondo').addEventListener('change', (e) => {
-  const on = e.target.checked;
-  if (fondoDome)   fondoDome.visible   = on;
-  if (vestierRoot) vestierRoot.visible = !on;
-  document.getElementById('fondo-ajustes').style.display = on ? 'block' : 'none';
-  if (on) actualizarFondo();
-});
-// ── Cámara ────────────────────────────────────────────────────────────────────
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
-camera.name = 'CamaraPrincipal';
-camera.position.set(4, 3, 6);
-
-// ── Controles ─────────────────────────────────────────────────────────────────
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.enablePan     = false;
-controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-controls.minAzimuthAngle = -Math.PI / 20;
-controls.maxAzimuthAngle =  Math.PI / 2;
-controls.maxPolarAngle   =  Math.PI / 2 - 0.05;
-controls.minPolarAngle   =  0.7;
-
-// ── Iluminación ───────────────────────────────────────────────────────────────
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-const hemiLight    = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
-scene.add(ambientLight, hemiLight);
-
-document.getElementById('global-intensidad').addEventListener('input', (e) => {
-  const v = parseFloat(e.target.value);
-  ambientLight.intensity       = v * 0.15;
-  hemiLight.intensity          = v * 0.2;
-  renderer.toneMappingExposure = 0.8 + v * 0.18;
-  // AGREGAR ESTO ↓
-  scene.traverse((n) => {
-        if (n.isMesh && n.material && n !== fondoDome) {
-      n.material.envMapIntensity = v * 0.3;
-      n.material.needsUpdate = true;
-    }
-  });
-});
-
-const GEO_TARGETS = [
-  'oversize_base_GEO', 'oversize_stitches_GEO',
-  'hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO',
-  'BigW_base_GEO', 'BigW_stitches_M', 'BigW_stitchesButton_M'
-];
-
-const PALETAS = {
-  'Oversize_W': [
-    [13,13,13], [38,9,93], [24,20,17], [52,43,64]
-  ],
-  'BigW': [
-    [51,52,45], [55,52,52], [46,33,53], [43,43,54]
-  ],
-  'Hoddie_GRP': [
-    [23,26,100], [149,58,182], [13,13,13], [107,29,170]
-  ]
+const GEO_TARGETS=['oversize_base_GEO','oversize_stitches_GEO','hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO','BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'];
+const PALETAS={
+  'Oversize_W':[[13,13,13],[38,9,93],[24,20,17],[52,43,64]],
+  'BigW':[[51,52,45],[55,52,52],[46,33,53],[43,43,54]],
+  'Hoddie_GRP':[[23,26,100],[149,58,182],[13,13,13],[107,29,170]]
 };
 
-function aplicarColor(r, g, b) {
-  if (!prendaActiva) return;
-  const color = new THREE.Color(r/255, g/255, b/255);
-  prendaActiva.traverse((n) => {
-    if (n.isMesh && GEO_TARGETS.includes(n.name)) {
-      n.material.color.set(color);
-      n.material.needsUpdate = true;
-    }
+function aplicarColor(r,g,b){
+  if(!prendaActiva) return;
+  const color=new THREE.Color(r/255,g/255,b/255);
+  prendaActiva.traverse(n=>{ if(n.isMesh&&GEO_TARGETS.includes(n.name)){ n.material.color.set(color); n.material.needsUpdate=true; }});
+}
+function mostrarPaleta(clave){
+  const sec=document.getElementById('color-section');
+  const tit=document.getElementById('color-titulo');
+  const sw=document.getElementById('color-swatches');
+  const pal=PALETAS[clave];
+  if(!pal){ sec.style.display='none'; return; }
+  tit.textContent=clave==='Hoddie_GRP'?'Hoddie Colors':clave==='Oversize_W'?'Oversize Colors':'BigW Colors';
+  sw.innerHTML='';
+  pal.forEach(([r,g,b])=>{
+    const btn=document.createElement('div');
+    btn.style.cssText=`width:32px;height:32px;border-radius:6px;background:rgb(${r},${g},${b});cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;`;
+    btn.title=`rgb(${r},${g},${b})`;
+    btn.addEventListener('mouseenter',()=>btn.style.borderColor='rgba(255,255,255,0.6)');
+    btn.addEventListener('mouseleave',()=>btn.style.borderColor='rgba(255,255,255,0.15)');
+    btn.addEventListener('click',()=>aplicarColor(r,g,b));
+    sw.appendChild(btn);
   });
+  sec.style.display='block';
 }
 
-function mostrarPaleta(clave) {
-  const section  = document.getElementById('color-section');
-  const titulo   = document.getElementById('color-titulo');
-  const swatches = document.getElementById('color-swatches');
-  const paleta   = PALETAS[clave];
-
-  if (!paleta) { section.style.display = 'none'; return; }
-
-  titulo.textContent = clave === 'Hoddie_GRP' ? 'Hoddie Colors'
-                     : clave === 'Oversize_W'  ? 'Oversize Colors'
-                     : 'BigW Colors';
-
-  swatches.innerHTML = '';
-  paleta.forEach(([r, g, b]) => {
-    const btn = document.createElement('div');
-    btn.style.cssText = `
-      width: 32px; height: 32px; border-radius: 6px;
-      background: rgb(${r},${g},${b});
-      cursor: pointer; border: 2px solid rgba(255,255,255,0.15);
-      transition: border-color 0.2s;
-    `;
-    btn.title = `rgb(${r}, ${g}, ${b})`;
-    btn.addEventListener('mouseenter', () => btn.style.borderColor = 'rgba(255,255,255,0.6)');
-    btn.addEventListener('mouseleave', () => btn.style.borderColor = 'rgba(255,255,255,0.15)');
-    btn.addEventListener('click', () => aplicarColor(r, g, b));
-    swatches.appendChild(btn);
-  });
-
-  section.style.display = 'block';
-}
-
-// ── Loaders ───────────────────────────────────────────────────────────────────
-const dracoLoader = new THREE.DRACOLoader();
+// ── Loaders ────────────────────────────────────────────────────────────────────
+const dracoLoader=new THREE.DRACOLoader();
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
+const gltfLoader=new THREE.GLTFLoader(); gltfLoader.setDRACOLoader(dracoLoader);
 
-const gltfLoader = new THREE.GLTFLoader();
-gltfLoader.setDRACOLoader(dracoLoader);
+// ── Estado prendas ─────────────────────────────────────────────────────────────
+let vestierRoot=null;
+const PRENDAS=['Hoddie_GRP','Oversize_W','BigW'];
+let prendaActiva=null, posOriginalLocal=new THREE.Vector3(), rotOriginalLocal=new THREE.Quaternion();
+let animando=false, modoDetalle=false, lastTapTime=0, lastTapObj=null;
+let centroPrendaMundo=new THREE.Vector3(), posDestinoLocal=new THREE.Vector3();
+const hintEl=document.getElementById('hint');
 
-// ── Estado de prendas ─────────────────────────────────────────────────────────
-let vestierRoot = null;
-const PRENDAS = ['Hoddie_GRP', 'Oversize_W', 'BigW'];
-let prendaActiva    = null;
-let posOriginalLocal  = new THREE.Vector3();
-let rotOriginalLocal  = new THREE.Quaternion();
-let animando        = false;
-let modoDetalle     = false;
-let lastTapTime     = 0;
-let lastTapObj      = null;
-let centroPrendaMundo = new THREE.Vector3();
-let posDestinoLocal = new THREE.Vector3(); // ← AGREGAR ESTA LÍNEA
-const hintEl        = document.getElementById('hint');
-
-// ── Animación easeInOut ───────────────────────────────────────────────────────
-function animarHacia(objeto, destino, duracion, onComplete, rotDestino) {
-  const posInicio = objeto.position.clone();
-  const rotInicio = objeto.quaternion.clone().normalize();
-  const rotFin    = rotDestino ? rotDestino.clone().normalize() : rotInicio.clone();
-
-  if (rotInicio.dot(rotFin) < 0) {
-    rotFin.set(-rotFin.x, -rotFin.y, -rotFin.z, -rotFin.w);
-  }
-
-  const startT = performance.now();
-  function step(now) {
-    const t = Math.min((now - startT) / duracion, 1);
-    const e = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
-    objeto.position.lerpVectors(posInicio, destino, e);
-    objeto.quaternion.slerpQuaternions(rotInicio, rotFin, e);
-    if (t < 1) requestAnimationFrame(step);
-    else if (onComplete) onComplete();
-  }
-  requestAnimationFrame(step);
+function animarHacia(obj,dest,dur,onDone,rotDest){
+  const p0=obj.position.clone(), r0=obj.quaternion.clone().normalize();
+  const r1=rotDest?rotDest.clone().normalize():r0.clone();
+  if(r0.dot(r1)<0) r1.set(-r1.x,-r1.y,-r1.z,-r1.w);
+  const t0=performance.now();
+  (function step(now){
+    const t=Math.min((now-t0)/dur,1), e=t<0.5?2*t*t:-1+(4-2*t)*t;
+    obj.position.lerpVectors(p0,dest,e);
+    obj.quaternion.slerpQuaternions(r0,r1,e);
+    if(t<1) requestAnimationFrame(step); else if(onDone) onDone();
+  })(performance.now());
 }
 
-// ── Cálculo de destino corregido ──────────────────────────────────────────────
-//
-// Problema anterior: se movía el pivot del objeto sin tener en cuenta que
-// el centro visual (bounding box center) puede estar desplazado del pivot.
-//
-// Solución:
-//  1. Calculamos el centro real del bounding box en espacio mundo.
-//  2. Calculamos el offset entre el pivot y ese centro (constante durante la animación).
-//  3. Determinamos dónde queremos que aparezca el CENTRO visual, usando el FOV
-//     de la cámara para asegurar que la prenda quede bien encuadrada.
-//  4. El nuevo pivot = destinoCentro − offset, convertido al espacio del padre.
-//
-function getDestinoLocal(prenda) {
-  // 1. Forzar actualización de matrices antes de leer
-  prenda.updateWorldMatrix(true, true);
-
-  // 2. Bounding box en espacio mundo → centro y tamaño reales
-  const box = new THREE.Box3().setFromObject(prenda);
-  const centroMundo = box.getCenter(new THREE.Vector3());
-  const size        = box.getSize(new THREE.Vector3());
-  const maxDim      = Math.max(size.x, size.y, size.z);
-
-  // 3. Pivot actual en espacio mundo
-  const pivotMundo = new THREE.Vector3();
-  prenda.getWorldPosition(pivotMundo);
-
-  // 4. Offset pivot → centro (en espacio mundo, constante)
-  const offset = centroMundo.clone().sub(pivotMundo);
-
-  // 5. Distancia cámara-objeto para que la prenda llene ~65% de la pantalla
-  //    Usamos el FOV vertical: d = (alto / 2) / tan(fov/2)
-  //    "alto" = maxDim * factor_de_relleno
-  const fovRad    = camera.fov * Math.PI / 180;
-  const distancia = (maxDim * 1.5) / (2 * Math.tan(fovRad / 2));
-
-  // 6. Punto destino del CENTRO en espacio local de cámara (eje -Z = adelante)
-  //    Lo pasamos a espacio mundo con la matriz mundo de la cámara
+function getDestinoLocal(prenda){
+  prenda.updateWorldMatrix(true,true);
+  const box=new THREE.Box3().setFromObject(prenda);
+  const centro=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3());
+  const maxDim=Math.max(size.x,size.y,size.z);
+  const pivot=new THREE.Vector3(); prenda.getWorldPosition(pivot);
+  const offset=centro.clone().sub(pivot);
+  const fovR=camera.fov*Math.PI/180;
+  const dist=(maxDim*1.5)/(2*Math.tan(fovR/2));
   camera.updateMatrixWorld();
-  const localCam          = new THREE.Vector3(0, 0, -distancia);
-  const destinoCentroMundo = localCam.applyMatrix4(camera.matrixWorld);
-
-  // 7. Nuevo pivot mundo = destinoCentro − offset
-  const nuevoPivotMundo = destinoCentroMundo.clone().sub(offset);
-
-  // 8. Convertir al espacio local del padre
-  const padre = prenda.parent;
-  if (padre && padre.type !== 'Scene') {
-    const inv = new THREE.Matrix4().copy(padre.matrixWorld).invert();
-    nuevoPivotMundo.applyMatrix4(inv);
-  }
-
-  return nuevoPivotMundo;
+  const destCentro=new THREE.Vector3(0,0,-dist).applyMatrix4(camera.matrixWorld);
+  const newPivot=destCentro.clone().sub(offset);
+  const padre=prenda.parent;
+  if(padre&&padre.type!=='Scene') newPivot.applyMatrix4(new THREE.Matrix4().copy(padre.matrixWorld).invert());
+  return newPivot;
 }
 
-// ── Raycast ───────────────────────────────────────────────────────────────────
-const raycaster   = new THREE.Raycaster();
-const mouse       = new THREE.Vector2();
-let pointerStart    = { x: 0, y: 0 };
-let pointerDownTime = 0;
-let isDragging      = false;
-let lastPointerX    = 0;
-const ROT_SPEED     = 0.012;
+const raycaster=new THREE.Raycaster(), mouse=new THREE.Vector2();
+let pointerStart={x:0,y:0}, pointerDownTime=0, isDragging=false, lastPointerX=0;
+const ROT_SPEED=0.012;
 
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  pointerDownTime = Date.now();
-  pointerStart    = { x: e.clientX, y: e.clientY };
-  lastPointerX    = e.clientX;
-  isDragging      = false;
+renderer.domElement.addEventListener('pointerdown', e=>{
+  pointerDownTime=Date.now(); pointerStart={x:e.clientX,y:e.clientY};
+  lastPointerX=e.clientX; isDragging=false;
   renderer.domElement.setPointerCapture(e.pointerId);
 });
-
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (!modoDetalle || !prendaActiva || animando) return;
-  if (e.pointerType === 'mouse' && !(e.buttons & 1)) return;
-
-  const dx = e.clientX - pointerStart.x;
-  if (!isDragging && Math.abs(dx) > 6) isDragging = true;
-
-if (isDragging) {
-  const delta = (e.clientX - lastPointerX) * ROT_SPEED;
-
-  // Rotar sobre el centro real de la prenda (no sobre su pivot)
-  const eje = new THREE.Vector3(0, 1, 0); // eje Y = gira de frente/espalda
-  const q   = new THREE.Quaternion().setFromAxisAngle(eje, delta);
-
-  // 1. Mover pivot al origen del centro
-  prendaActiva.position.sub(centroPrendaMundo);
-  // 2. Rotar posición
-  prendaActiva.position.applyQuaternion(q);
-  // 3. Rotar la orientación del objeto
-  prendaActiva.quaternion.premultiply(q);
-  // 4. Devolver al centro
-  prendaActiva.position.add(centroPrendaMundo);
-}
-  lastPointerX = e.clientX;
-});
-
-renderer.domElement.addEventListener('pointerup', (e) => {
-  const moved   = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-  const elapsed = Date.now() - pointerDownTime;
-  if (isDragging || moved > 10 || elapsed > 400) { isDragging = false; return; }
-  isDragging = false;
-
-  mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera(mouse, camera);
-    const hits = raycaster.intersectObjects(scene.children.filter(o => o !== fondoDome), true);
-  if (!hits.length) return;
-
-  let nodo  = hits[0].object;
-  let clave = null;
-  while (nodo) {
-    if (PRENDAS.includes(nodo.name)) { clave = nodo.name; break; }
-    nodo = nodo.parent;
+renderer.domElement.addEventListener('pointermove', e=>{
+  if(!modoDetalle||!prendaActiva||animando) return;
+  if(e.pointerType==='mouse'&&!(e.buttons&1)) return;
+  const dx=e.clientX-pointerStart.x;
+  if(!isDragging&&Math.abs(dx)>6) isDragging=true;
+  if(isDragging){
+    const delta=(e.clientX-lastPointerX)*ROT_SPEED;
+    const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),delta);
+    prendaActiva.position.sub(centroPrendaMundo);
+    prendaActiva.position.applyQuaternion(q);
+    prendaActiva.quaternion.premultiply(q);
+    prendaActiva.position.add(centroPrendaMundo);
   }
-  if (!clave) return;
-
-  const ahora = Date.now();
-  const doble = (clave === lastTapObj) && (ahora - lastTapTime < 500);
-  lastTapTime = ahora;
-  lastTapObj  = clave;
-
-  if (animando) return;
-
-  // ── Doble tap: regresar a posición original ───────────────────────────────
-if (doble && modoDetalle && prendaActiva?.name === clave) {
-  animando = true;
-  controls.enabled = false;
-  hintEl.classList.remove('visible');
-
-  prendaActiva.quaternion.copy(rotOriginalLocal);
-  prendaActiva.position.copy(posDestinoLocal);
-
-  animarHacia(prendaActiva, posOriginalLocal, 500, () => {
-    modoDetalle      = false;
-    animando         = false;
-    controls.enabled = false;
-    prendaActiva     = null;
-    document.getElementById('color-section').style.display = 'none';
-  }, rotOriginalLocal);
-  return;
-}
-
-  // ── Tap simple: llevar prenda al frente de la cámara ─────────────────────
-  if (!modoDetalle) {
-    scene.traverse((n) => { if (n.name === clave) prendaActiva = n; });
-    if (!prendaActiva) return;
-
+  lastPointerX=e.clientX;
+});
+renderer.domElement.addEventListener('pointerup', e=>{
+  const moved=Math.hypot(e.clientX-pointerStart.x,e.clientY-pointerStart.y);
+  const elapsed=Date.now()-pointerDownTime;
+  if(isDragging||moved>10||elapsed>400){ isDragging=false; return; }
+  isDragging=false;
+  mouse.x=(e.clientX/window.innerWidth)*2-1;
+  mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(scene.children.filter(o=>o!==fondoDome),true);
+  if(!hits.length) return;
+  let nodo=hits[0].object, clave=null;
+  while(nodo){ if(PRENDAS.includes(nodo.name)){ clave=nodo.name; break; } nodo=nodo.parent; }
+  if(!clave) return;
+  const ahora=Date.now();
+  const doble=(clave===lastTapObj)&&(ahora-lastTapTime<500);
+  lastTapTime=ahora; lastTapObj=clave;
+  if(animando) return;
+  if(doble&&modoDetalle&&prendaActiva?.name===clave){
+    animando=true; controls.enabled=false; hintEl.classList.remove('visible');
+    prendaActiva.quaternion.copy(rotOriginalLocal);
+    prendaActiva.position.copy(posDestinoLocal);
+    animarHacia(prendaActiva,posOriginalLocal,500,()=>{
+      modoDetalle=false; animando=false; controls.enabled=false; prendaActiva=null;
+      document.getElementById('color-section').style.display='none';
+    },rotOriginalLocal);
+    return;
+  }
+  if(!modoDetalle){
+    scene.traverse(n=>{ if(n.name===clave) prendaActiva=n; });
+    if(!prendaActiva) return;
     posOriginalLocal.copy(prendaActiva.position);
-rotOriginalLocal.copy(prendaActiva.quaternion);
-    const destinoLocal = getDestinoLocal(prendaActiva);
-
-    modoDetalle      = true;
-    animando         = true;
-    controls.enabled = false;
-
-animarHacia(prendaActiva, destinoLocal, 700, () => {
-  animando         = false;
-  controls.enabled = false;
-  hintEl.classList.add('visible');
-
-  mostrarPaleta(clave);
-
-  posDestinoLocal = prendaActiva.position.clone();
-
-  const box = new THREE.Box3().setFromObject(prendaActiva);
-  box.getCenter(centroPrendaMundo);
-});
+    rotOriginalLocal.copy(prendaActiva.quaternion);
+    const dest=getDestinoLocal(prendaActiva);
+    modoDetalle=true; animando=true; controls.enabled=false;
+    animarHacia(prendaActiva,dest,700,()=>{
+      animando=false; controls.enabled=false; hintEl.classList.add('visible');
+      mostrarPaleta(clave);
+      posDestinoLocal=prendaActiva.position.clone();
+      new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
+    });
   }
 });
 
-// ── Cargar modelo ─────────────────────────────────────────────────────────────
-function onVestierLoad(gltf) {
-  const root = gltf.scene;
-  scene.add(root);
-  vestierRoot = root;
-
-  console.log('=== Nodos del GLB ===');
-  root.traverse((n) => {
-    if (n.name) console.log(n.type, '→', n.name);
-  });
-
-  const box    = new THREE.Box3().setFromObject(root);
-  const center = box.getCenter(new THREE.Vector3());
-  const size   = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-
-  controls.target.copy(center);
-  camera.near = maxDim / 20;
-  camera.far  = maxDim * 4;
-  camera.position.set(center.x, center.y, center.z + maxDim * 0.7);
-  camera.lookAt(center);
-  camera.updateProjectionMatrix();
-  controls.update();
-  controls.enabled = false;
-
-  // Parámetros del fondo según el vestier
-  bgBase.origin.copy(center);
-  bgBase.height = Math.max(0.01, center.y - box.min.y);
-  bgBase.maxDim = maxDim;
-  if (fondoDome) fondoDome.scale.setScalar(maxDim * 2);
+// ── Cargar modelos ─────────────────────────────────────────────────────────────
+function onVestierLoad(gltf){
+  const root=gltf.scene; scene.add(root); vestierRoot=root;
+  const box=new THREE.Box3().setFromObject(root);
+  const center=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3());
+  const maxDim=Math.max(size.x,size.y,size.z);
+  camera.near=maxDim/20; camera.far=maxDim*4; camera.updateProjectionMatrix();
+  controls.enabled=false;
+  bgBase.origin.copy(center); bgBase.height=Math.max(0.01,center.y-box.min.y); bgBase.maxDim=maxDim;
+  if(fondoDome) fondoDome.scale.setScalar(maxDim*2);
   actualizarFondo();
-
-  document.getElementById('loading').style.display = 'none';
-
-  if (document.getElementById('hdri-fondo').checked) vestierRoot.visible = false;
+  document.getElementById('loading').style.display='none';
+  if(document.getElementById('hdri-fondo').checked) vestierRoot.visible=false;
 }
-
-function onVestierProgress(xhr) {
-  if (xhr.lengthComputable) {
-    const pct = Math.round((xhr.loaded / xhr.total) * 100);
-    document.getElementById('loading').textContent = `Cargando modelo… ${pct}%`;
-  }
+function cargarVestier(n=3){
+  gltfLoader.load('Models/vestier.glb', onVestierLoad,
+    xhr=>{ if(xhr.lengthComputable) document.getElementById('loading').textContent=`Cargando modelo… ${Math.round(xhr.loaded/xhr.total*100)}%`; },
+    err=>{ if(n>0){ setTimeout(()=>cargarVestier(n-1),800); } else { console.error('[Room]',err); document.getElementById('loading').textContent='Error al cargar Models/vestier.glb'; }});
 }
-
-function cargarVestier(intentos = 3) {
-  gltfLoader.load('Models/vestier.glb', onVestierLoad, onVestierProgress, (err) => {
-    if (intentos > 0) {
-      console.warn('Reintentando vestier.glb…', intentos);
-      document.getElementById('loading').textContent = 'Reintentando…';
-      setTimeout(() => cargarVestier(intentos - 1), 800);
-    } else {
-      console.error('[Room] Error:', err);
-      document.getElementById('loading').textContent =
-        'Error al cargar el modelo. Verifica la ruta Models/vestier.glb';
-    }
-  });
-}
-
 cargarVestier();
 
-// REEMPLAZAR los dos gltfLoader.load de Hoddie y Oversize
-gltfLoader.load('Models/Hoddie.glb', (gltf) => {
-  const root = gltf.scene;
-  scene.add(root);
-  root.traverse((n) => {
-    if (n.isMesh) {
-      n.material = n.material.clone();
-      n.material.metalness  = 0;
-      n.material.roughness  = 0.85;
-      n.material.envMapIntensity = 0.3;
+gltfLoader.load('Models/Camera_03.glb', gltf=>{
+  const camGLB=gltf.cameras[0]; if(!camGLB) return;
+  gltf.scene.updateMatrixWorld(true);
+  const pos=new THREE.Vector3(),quat=new THREE.Quaternion(),esc=new THREE.Vector3();
+  camGLB.matrixWorld.decompose(pos,quat,esc);
+  camFovBase=camGLB.fov; camera.fov=camGLB.fov;
+  camera.position.copy(pos); camera.quaternion.copy(quat);
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld(); ajustarFovCamara();
+  const dir=new THREE.Vector3(0,0,-1).applyQuaternion(quat);
+  controls.target.copy(pos).addScaledVector(dir,2.872);
+  controls.minPolarAngle=0; controls.maxPolarAngle=Math.PI;
+  controls.minAzimuthAngle=-Infinity; controls.maxAzimuthAngle=Infinity;
+  controls.update(); controls.enabled=false; controls.dispose();
+}, undefined, e=>console.error('[Camara.glb]',e));
 
-      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
-      if (['hoddie_GEO', 'hoddie__stitchesBase_GEO', 'stitchesHood_GEO'].includes(n.name))
-  n.material.color.set(new THREE.Color(23/255, 26/255, 100/255));
-      n.material.needsUpdate = true;
-    }
+function cargarPrenda(path,names,color){ gltfLoader.load(path, gltf=>{
+  const root=gltf.scene; scene.add(root);
+  root.traverse(n=>{ if(n.isMesh){
+    n.material=n.material.clone(); n.material.metalness=0; n.material.roughness=0.85; n.material.envMapIntensity=0.3;
+    if(n.material.map) n.material.map.encoding=THREE.sRGBEncoding;
+    if(names.includes(n.name)) n.material.color.set(color);
+    n.material.needsUpdate=true;
+  }});
+}, undefined, e=>console.error(`[${path}]`,e)); }
+
+cargarPrenda('Models/Hoddie.glb', ['hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO'], new THREE.Color(23/255,26/255,100/255));
+cargarPrenda('Models/Oversize.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(13/255,13/255,13/255));
+cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'], new THREE.Color(51/255,52/255,45/255));
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PIPELINE AO — render separado de prendas → mapa AO → canvas 2D overlay
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Escena auxiliar que solo contiene las prendas (no el fondo, no el vestier)
+const sceneAO = new THREE.Scene();
+
+// RT con depth texture para el pase AO
+let rtPrendas = null;
+
+function buildAOTargets(w, h){
+  if(rtPrendas) rtPrendas.dispose();
+  rtPrendas = new THREE.WebGLRenderTarget(w, h, {
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+    depthBuffer: true, stencilBuffer: false,
+    depthTexture: new THREE.DepthTexture(w, h, THREE.UnsignedIntType)
   });
-}, undefined, (err) => console.error('[Hoddie]', err));
+}
+buildAOTargets(window.innerWidth, window.innerHeight);
 
-gltfLoader.load('Models/Oversize.glb', (gltf) => {
-  const root = gltf.scene;
-  scene.add(root);
-  root.traverse((n) => {
-    if (n.isMesh) {
-      n.material = n.material.clone();
-      n.material.metalness       = 0;
-      n.material.roughness       = 0.85;
-      n.material.envMapIntensity = 0.3;
-     
-      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
-      if (['oversize_base_GEO', 'oversize_stitches_GEO'].includes(n.name))
-  n.material.color.set(new THREE.Color(13/255, 13/255, 13/255));
-      n.material.needsUpdate = true;
-    }
+// RT normal de prendas
+let rtNormals = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat
+});
+
+// RT mapa AO crudo y blurs
+let rtAO_raw  = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat });
+let rtAO_blH  = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat });
+let rtAO_blV  = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat });
+
+function resizeAOTargets(w,h){
+  rtPrendas.dispose(); buildAOTargets(w,h);
+  [rtNormals,rtAO_raw,rtAO_blH,rtAO_blV].forEach(rt=>rt.setSize(w,h));
+}
+
+// Material normales
+const normalMat = new THREE.ShaderMaterial({
+  vertexShader:  `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader:`varying vec3 vN; void main(){ gl_FragColor=vec4(vN*0.5+0.5,1.0); }`
+});
+
+// Material AO
+const aoMat = new THREE.ShaderMaterial({
+  uniforms:{
+    tDepth:{value:null}, tNormal:{value:null}, uSize:{value:new THREE.Vector2(1,1)},
+    uRadius:{value:6.0}, uBias:{value:0.025}, uIntensity:{value:1.0}, uSamples:{value:16},
+    cameraNear:{value:0.1}, cameraFar:{value:1000},
+    projMatrix:{value:new THREE.Matrix4()}, invProjMatrix:{value:new THREE.Matrix4()}
+  },
+  vertexShader:SSAO_VERT, fragmentShader:SSAO_FRAG
+});
+
+// Material blur
+const blurMatH = new THREE.ShaderMaterial({
+  uniforms:{ tAO:{value:null}, uSize:{value:new THREE.Vector2(1,1)}, uDir:{value:new THREE.Vector2(1,0)} },
+  vertexShader:BLUR_VERT, fragmentShader:BLUR_FRAG
+});
+const blurMatV = new THREE.ShaderMaterial({
+  uniforms:{ tAO:{value:null}, uSize:{value:new THREE.Vector2(1,1)}, uDir:{value:new THREE.Vector2(0,1)} },
+  vertexShader:BLUR_VERT, fragmentShader:BLUR_FRAG
+});
+
+// Quad fullscreen para shader passes
+const quadScene = new THREE.Scene();
+const quadCam   = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const quadMesh  = new THREE.Mesh(new THREE.PlaneGeometry(2,2), aoMat);
+quadScene.add(quadMesh);
+
+function renderQuad(mat, target){
+  quadMesh.material = mat;
+  renderer.setRenderTarget(target);
+  renderer.render(quadScene, quadCam);
+}
+
+// Canvas 2D overlay
+const aoCanvas = document.getElementById('ao-canvas');
+const aoCtx    = aoCanvas.getContext('2d');
+function resizeAOCanvas(w,h){ aoCanvas.width=w; aoCanvas.height=h; aoCanvas.style.width=w+'px'; aoCanvas.style.height=h+'px'; }
+resizeAOCanvas(window.innerWidth, window.innerHeight);
+
+// Buffer para leer pixels del RT AO
+let aoPixels = new Uint8Array(window.innerWidth * window.innerHeight * 4);
+
+// ── Estado AO ─────────────────────────────────────────────────────────────────
+const aoState = { enabled:false, onlyAO:false, radius:6, intensity:1.0, samples:16 };
+
+// ── Actualizar etiquetas ───────────────────────────────────────────────────────
+document.getElementById('ao-toggle').addEventListener('change', e=>{ aoState.enabled=e.target.checked; if(!e.target.checked){ aoCanvas.style.display='none'; }});
+document.getElementById('ao-radius').addEventListener('input',   e=>{ aoState.radius=parseFloat(e.target.value); document.getElementById('lbl-radius').textContent=aoState.radius.toFixed(1); });
+document.getElementById('ao-intensity').addEventListener('input', e=>{ aoState.intensity=parseFloat(e.target.value); document.getElementById('lbl-intensity').textContent=aoState.intensity.toFixed(2); });
+document.getElementById('ao-samples').addEventListener('input',   e=>{ aoState.samples=parseInt(e.target.value); document.getElementById('lbl-samples').textContent=aoState.samples; });
+document.getElementById('ao-only').addEventListener('change',     e=>{ aoState.onlyAO=e.target.checked; });
+
+// ── Función principal AO ──────────────────────────────────────────────────────
+//   Recoge las prendas de la escena principal, las renderiza solas,
+//   calcula AO y vuelca el resultado en el canvas 2D overlay.
+function renderAO() {
+  const W = window.innerWidth, H = window.innerHeight;
+
+  // Recolectar meshes de prendas (excluye fondoDome y vestierRoot)
+  const meshes = [];
+  scene.traverse(n => {
+    if (!n.isMesh) return;
+    if (n === fondoDome) return;
+    // Excluir meshes del vestier (están dentro de vestierRoot)
+    let anc = n.parent;
+    let esVestier = false;
+    while (anc){ if(anc===vestierRoot){ esVestier=true; break; } anc=anc.parent; }
+    if (!esVestier) meshes.push(n);
   });
-}, undefined, (err) => console.error('[Oversize]', err));
 
-gltfLoader.load('Models/BigW.glb', (gltf) => {
-  const root = gltf.scene;
-  scene.add(root);
-  root.traverse((n) => {
-    if (n.isMesh) {
-      n.material = n.material.clone();
-      n.material.metalness       = 0;
-      n.material.roughness       = 0.85;
-      n.material.envMapIntensity = 0.3;
-     
-      if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
-      if (['BigW_base_GEO', 'BigW_stitches_M', 'BigW_stitchesButton_M'].includes(n.name))
-  n.material.color.set(new THREE.Color(51/255, 52/255, 45/255));
-      n.material.needsUpdate     = true;
+  if (meshes.length === 0) return;
+
+  // ── 1. Render de normales (solo prendas) ──────────────────────────────────
+  const savedMats = new Map();
+  meshes.forEach(m => { savedMats.set(m, m.material); m.material = normalMat; });
+  renderer.setRenderTarget(rtNormals);
+  renderer.clearColor(); renderer.clearDepth();
+  renderer.render(scene, camera);   // scene completa pero prendas con normalMat; el fondo también
+  // recuperar materiales
+  meshes.forEach(m => m.material = savedMats.get(m));
+
+  // ── 2. Render de color + depth (solo prendas — sin fondo) ─────────────────
+  //   Ocultamos temporalmente el fondo y el vestier
+  const savedFondoVisible  = fondoDome ? fondoDome.visible  : false;
+  const savedVestierVisible= vestierRoot ? vestierRoot.visible : false;
+  const savedBG = scene.background;
+  if(fondoDome)    fondoDome.visible   = false;
+  if(vestierRoot)  vestierRoot.visible = false;
+  scene.background = null;
+
+  renderer.setRenderTarget(rtPrendas);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clearColor(); renderer.clearDepth();
+  renderer.render(scene, camera);
+
+  // Restaurar visibilidad
+  if(fondoDome)   fondoDome.visible   = savedFondoVisible;
+  if(vestierRoot) vestierRoot.visible = savedVestierVisible;
+  scene.background = savedBG;
+
+  // ── 3. Shader AO ──────────────────────────────────────────────────────────
+  const u = aoMat.uniforms;
+  u.tDepth.value   = rtPrendas.depthTexture;
+  u.tNormal.value  = rtNormals.texture;
+  u.uSize.value.set(W,H);
+  u.uRadius.value   = aoState.radius;
+  u.uIntensity.value= aoState.intensity;
+  u.uSamples.value  = aoState.samples;
+  u.uBias.value     = 0.025;
+  u.cameraNear.value= camera.near;
+  u.cameraFar.value = camera.far;
+  u.projMatrix.value.copy(camera.projectionMatrix);
+  u.invProjMatrix.value.copy(camera.projectionMatrixInverse);
+  renderQuad(aoMat, rtAO_raw);
+
+  // ── 4. Blur ────────────────────────────────────────────────────────────────
+  blurMatH.uniforms.tAO.value = rtAO_raw.texture;
+  blurMatH.uniforms.uSize.value.set(W,H);
+  renderQuad(blurMatH, rtAO_blH);
+
+  blurMatV.uniforms.tAO.value = rtAO_blH.texture;
+  blurMatV.uniforms.uSize.value.set(W,H);
+  renderQuad(blurMatV, rtAO_blV);
+
+  renderer.setRenderTarget(null);
+
+  // ── 5. Leer pixels y dibujar en canvas 2D ────────────────────────────────
+  if (aoPixels.length !== W * H * 4) aoPixels = new Uint8Array(W * H * 4);
+
+  renderer.readRenderTargetPixels(rtAO_blV, 0, 0, W, H, aoPixels);
+
+  aoCanvas.style.display = 'block';
+
+  if (aoState.onlyAO) {
+    // Modo debug: mostrar solo el mapa AO (blanco=libre, negro=ocluido)
+    // Sin blend-mode multiplicativo — canvas opaco sobre todo
+    aoCanvas.style.mixBlendMode = 'normal';
+    aoCanvas.style.opacity = '1';
+    const id = aoCtx.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) {
+      const v = aoPixels[(H - 1 - Math.floor(i / W)) * W * 4 + (i % W) * 4]; // Y flip
+      id.data[i*4]   = v;
+      id.data[i*4+1] = v;
+      id.data[i*4+2] = v;
+      id.data[i*4+3] = 255;
     }
-  });
-}, undefined, (err) => console.error('[BigW]', err));
-
-// ── Post-processing / SSAO ────────────────────────────────────────────────────
-const composer = new THREE.EffectComposer(renderer);
-const renderPass = new THREE.RenderPass(scene, camera);
-composer.addPass(renderPass);
-
-const ssaoPass = new THREE.SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-ssaoPass.kernelRadius = 16;
-ssaoPass.minDistance  = 0.001;
-ssaoPass.maxDistance  = 0.02;   // ← MUY bajo para no oscurecer todo
-ssaoPass.output       = THREE.SSAOPass.OUTPUT.Default;
-ssaoPass.enabled      = false;
-composer.addPass(ssaoPass);
-
-let aoActivo = false;
-
-document.getElementById('ao-toggle').addEventListener('change', (e) => {
-  aoActivo = e.target.checked;
-  ssaoPass.enabled = aoActivo;
-});
-
-document.getElementById('ao-radius').addEventListener('input', (e) => {
-  ssaoPass.kernelRadius = parseFloat(e.target.value);
-});
-
-// Intensidad = maxDistance, rango muy fino
-document.getElementById('ao-intensity').addEventListener('input', (e) => {
-  ssaoPass.maxDistance = parseFloat(e.target.value);
-});
-
-document.getElementById('ao-samples').addEventListener('input', (e) => {
-  ssaoPass.kernelSize = parseInt(e.target.value);
-});
-
-document.getElementById('ao-only').addEventListener('change', (e) => {
-  ssaoPass.output = e.target.checked
-    ? THREE.SSAOPass.OUTPUT.SSAO
-    : THREE.SSAOPass.OUTPUT.Default;
-});
-
-// ── Loop de render ────────────────────────────────────────────────────────────
-(function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  camera.updateMatrixWorld();
-  if (fondoDome) fondoDome.position.copy(camera.position);
-  if (aoActivo) {
-    composer.render();
+    aoCtx.putImageData(id, 0, 0);
   } else {
-    renderer.render(scene, camera);
+    // Modo normal: overlay multiply — solo oscurece donde hay oclusión
+    // Pintamos el mapa en escala de grises y el CSS blend mode multiply lo aplica
+    aoCanvas.style.mixBlendMode = 'multiply';
+    // Opacity controla la fuerza del AO visible
+    aoCanvas.style.opacity = '1';
+    const id = aoCtx.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) {
+      const row = H - 1 - Math.floor(i / W); // flip Y (WebGL vs Canvas2D)
+      const col = i % W;
+      const v   = aoPixels[row * W * 4 + col * 4];
+      id.data[i*4]   = v;
+      id.data[i*4+1] = v;
+      id.data[i*4+2] = v;
+      id.data[i*4+3] = 255;
+    }
+    aoCtx.putImageData(id, 0, 0);
   }
+}
+
+// ── Loop de render ─────────────────────────────────────────────────────────────
+(function animate(){
+  requestAnimationFrame(animate);
+  camera.updateMatrixWorld();
+  if(fondoDome) fondoDome.position.copy(camera.position);
+
+  // Render principal normal (sin tocar el pipeline)
+  renderer.setRenderTarget(null);
+  renderer.render(scene, camera);
+
+  // AO encima
+  if(aoState.enabled) renderAO();
+  else if(aoCanvas.style.display !== 'none') aoCanvas.style.display='none';
 })();
 
-// ── Responsive ────────────────────────────────────────────────────────────────
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight); // ← AGREGAR
+// ── Resize ─────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', ()=>{
+  const W=window.innerWidth, H=window.innerHeight;
+  ajustarFovCamara();
+  renderer.setSize(W,H);
+  resizeAOTargets(W,H);
+  resizeAOCanvas(W,H);
 });
 </script>
 </body>
