@@ -88,8 +88,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
     <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:8px;">
       <input type="checkbox" id="ao-toggle"> Activar AO
     </label>
-    <label>Radius <span id="lbl-radius">6</span></label>
-    <input type="range" id="ao-radius" min="1" max="32" step="0.5" value="6">
+    <label>Radius <span id="lbl-radius">0.15</span></label>
+    <input type="range" id="ao-radius" min="0.01" max="1.0" step="0.01" value="0.15">
     <label>Intensidad <span id="lbl-intensity">1.0</span></label>
     <input type="range" id="ao-intensity" min="0" max="3" step="0.05" value="1">
     <label>Samples <span id="lbl-samples">16</span></label>
@@ -283,7 +283,7 @@ cargarHDRI('studio016');
 document.getElementById('hdri-select').addEventListener('change', e => cargarHDRI(e.target.value));
 
 // ── Fondo plano ───────────────────────────────────────────────────────────────
-const BG_IMAGE_PATH = 'Backgrounds/Vestier_v004.png';
+const BG_IMAGE_PATH = 'Backgrounds/Vestier_v007.png';
 const BG_ASPECT = 1920 / 1080;
 let bgImgAspect = BG_ASPECT, camFovBase = 50, fondoDome = null;
 const bgBase = { origin: new THREE.Vector3(), height: 1, maxDim: 1 };
@@ -351,6 +351,28 @@ function ajustarFovCamara(){
 const ambientLight=new THREE.AmbientLight(0xffffff,0.6);
 const hemiLight=new THREE.HemisphereLight(0xffffff,0x444444,0.8);
 scene.add(ambientLight,hemiLight);
+
+const luzNichos = [
+  { x: -1.45, z: -4.87 },
+  { x: -0.72, z: -4.87 },
+  { x: -0.27, z: -4.80 },
+  { x:  0.46, z: -4.80 },
+  { x:  0.85, z: -4.81 },
+  { x:  1.52, z: -4.81 },
+];
+
+luzNichos.forEach(pos => {
+  const spot = new THREE.PointLight(0xfff5e0, 3.5, 4);
+  spot.position.set(pos.x, 1, pos.z);
+  scene.add(spot);
+
+  /*const dbg = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1),
+    new THREE.MeshBasicMaterial({ color: 0xffff00 })
+  );
+  dbg.position.copy(spot.position);
+  scene.add(dbg);*/
+});
 
 document.getElementById('global-intensidad').addEventListener('input', e=>{
   const v=parseFloat(e.target.value);
@@ -493,12 +515,18 @@ renderer.domElement.addEventListener('pointerup', e=>{
     rotOriginalLocal.copy(prendaActiva.quaternion);
     const dest=getDestinoLocal(prendaActiva);
     modoDetalle=true; animando=true; controls.enabled=false;
-    animarHacia(prendaActiva,dest,700,()=>{
-      animando=false; controls.enabled=false; hintEl.classList.add('visible');
-      mostrarPaleta(clave);
-      posDestinoLocal=prendaActiva.position.clone();
-      new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
-    });
+camera.updateMatrixWorld();
+const camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+camDir.y = 0; camDir.normalize();
+const intermedio = posOriginalLocal.clone().addScaledVector(camDir, posOriginalLocal.distanceTo(dest) * -0.3);
+animarHacia(prendaActiva, intermedio, 280, ()=>{
+  animarHacia(prendaActiva, dest, 480, ()=>{
+    animando=false; controls.enabled=false; hintEl.classList.add('visible');
+    mostrarPaleta(clave);
+    posDestinoLocal=prendaActiva.position.clone();
+    new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
+  });
+});
   }
 });
 
@@ -550,9 +578,11 @@ function cargarPrenda(path,names,color){ gltfLoader.load(path, gltf=>{
 }, undefined, e=>console.error(`[${path}]`,e)); }
 
 cargarPrenda('Models/Hoddie.glb', ['hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO'], new THREE.Color(23/255,26/255,100/255));
-cargarPrenda('Models/Oversize.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(13/255,13/255,13/255));
+cargarPrenda('Models/Oversize_W.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(13/255,13/255,13/255));
 cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'], new THREE.Color(51/255,52/255,45/255));
-
+cargarPrenda('Models/Maniqui_Oversize_W.glb', [], new THREE.Color(1,1,1));
+cargarPrenda('Models/Maniqui_Hoddie.glb', [], new THREE.Color(1,1,1));
+cargarPrenda('Models/Maniqui_BigW.glb', [], new THREE.Color(1,1,1));
 // ══════════════════════════════════════════════════════════════════════════════
 //  PIPELINE AO — render separado de prendas → mapa AO → canvas 2D overlay
 // ══════════════════════════════════════════════════════════════════════════════
@@ -599,7 +629,7 @@ const normalMat = new THREE.ShaderMaterial({
 const aoMat = new THREE.ShaderMaterial({
   uniforms:{
     tDepth:{value:null}, tNormal:{value:null}, uSize:{value:new THREE.Vector2(1,1)},
-    uRadius:{value:6.0}, uBias:{value:0.025}, uIntensity:{value:1.0}, uSamples:{value:16},
+    uRadius:{value:0.15}, uBias:{value:0.025}, uIntensity:{value:1.0}, uSamples:{value:16},
     cameraNear:{value:0.1}, cameraFar:{value:1000},
     projMatrix:{value:new THREE.Matrix4()}, invProjMatrix:{value:new THREE.Matrix4()}
   },
@@ -670,11 +700,14 @@ function renderAO() {
   // ── 1. Render de normales (solo prendas) ──────────────────────────────────
   const savedMats = new Map();
   meshes.forEach(m => { savedMats.set(m, m.material); m.material = normalMat; });
+  // Mover meshes a sceneAO temporalmente
+  const savedParents = new Map();
+  meshes.forEach(m => { savedParents.set(m, m.parent); sceneAO.attach(m); });
   renderer.setRenderTarget(rtNormals);
   renderer.clearColor(); renderer.clearDepth();
-  renderer.render(scene, camera);   // scene completa pero prendas con normalMat; el fondo también
-  // recuperar materiales
-  meshes.forEach(m => m.material = savedMats.get(m));
+  renderer.render(sceneAO, camera);
+  // Devolver meshes a su lugar y restaurar materiales
+  meshes.forEach(m => { const p = savedParents.get(m); if(p) p.attach(m); m.material = savedMats.get(m); });
 
   // ── 2. Render de color + depth (solo prendas — sin fondo) ─────────────────
   //   Ocultamos temporalmente el fondo y el vestier
@@ -743,20 +776,19 @@ function renderAO() {
     }
     aoCtx.putImageData(id, 0, 0);
   } else {
-    // Modo normal: overlay multiply — solo oscurece donde hay oclusión
-    // Pintamos el mapa en escala de grises y el CSS blend mode multiply lo aplica
-    aoCanvas.style.mixBlendMode = 'multiply';
-    // Opacity controla la fuerza del AO visible
+    // Modo normal: sombra negra semitransparente solo donde hay oclusión
+    aoCanvas.style.mixBlendMode = 'normal';
     aoCanvas.style.opacity = '1';
     const id = aoCtx.createImageData(W, H);
     for (let i = 0; i < W * H; i++) {
-      const row = H - 1 - Math.floor(i / W); // flip Y (WebGL vs Canvas2D)
+      const row = H - 1 - Math.floor(i / W);
       const col = i % W;
       const v   = aoPixels[row * W * 4 + col * 4];
-      id.data[i*4]   = v;
-      id.data[i*4+1] = v;
-      id.data[i*4+2] = v;
-      id.data[i*4+3] = 255;
+      id.data[i*4]   = 0;
+      id.data[i*4+1] = 0;
+      id.data[i*4+2] = 0;
+      // v=255 libre → alpha 0 (invisible), v=0 ocluido → alpha 255 (negro)
+      id.data[i*4+3] = 255 - v;
     }
     aoCtx.putImageData(id, 0, 0);
   }
