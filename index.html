@@ -67,6 +67,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   <label>Intensidad</label>
   <input type="range" id="global-intensidad" min="0" max="5" step="0.05" value="1">
 
+  <label style="margin-top:10px;">Nichos <span id="lbl-nichos">3.5</span></label>
+  <input type="range" id="nichos-intensidad" min="0" max="10" step="0.1" value="3.5">
+
   <label style="margin-top:14px;">HDRI</label>
   <select id="hdri-select" style="width:100%; background:#1a1a1a; color:#ccc;
     border:1px solid rgba(255,255,255,0.12); border-radius:6px;
@@ -283,7 +286,7 @@ cargarHDRI('studio016');
 document.getElementById('hdri-select').addEventListener('change', e => cargarHDRI(e.target.value));
 
 // ── Fondo plano ───────────────────────────────────────────────────────────────
-const BG_IMAGE_PATH = 'Backgrounds/Vestier_v007.png';
+const BG_IMAGE_PATH = 'Backgrounds/Vestier_v009.png';
 const BG_ASPECT = 1920 / 1080;
 let bgImgAspect = BG_ASPECT, camFovBase = 50, fondoDome = null;
 const bgBase = { origin: new THREE.Vector3(), height: 1, maxDim: 1 };
@@ -361,10 +364,12 @@ const luzNichos = [
   { x:  1.52, z: -4.81 },
 ];
 
+const luzNichosLights = [];
 luzNichos.forEach(pos => {
   const spot = new THREE.PointLight(0xfff5e0, 3.5, 4);
   spot.position.set(pos.x, 1, pos.z);
   scene.add(spot);
+  luzNichosLights.push(spot);
 
   /*const dbg = new THREE.Mesh(
     new THREE.SphereGeometry(0.1),
@@ -380,18 +385,43 @@ document.getElementById('global-intensidad').addEventListener('input', e=>{
   renderer.toneMappingExposure=0.8+v*0.18;
   scene.traverse(n=>{ if(n.isMesh&&n.material&&n!==fondoDome){ n.material.envMapIntensity=v*0.3; n.material.needsUpdate=true; }});
 });
-
+document.getElementById('nichos-intensidad').addEventListener('input', e=>{
+  const v = parseFloat(e.target.value);
+  document.getElementById('lbl-nichos').textContent = v.toFixed(1);
+  luzNichosLights.forEach(l => l.intensity = v);
+});
 const GEO_TARGETS=['oversize_base_GEO','oversize_stitches_GEO','hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO','BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'];
+const esTargetColor = n => GEO_TARGETS.includes(n) || /Cuero_GEO|Stitches_GEO|Tela_GEO|Cuero_1_GEO|Cuero_2_GEO/.test(n);
 const PALETAS={
   'Oversize_W':[[13,13,13],[38,9,93],[24,20,17],[52,43,64]],
   'BigW':[[51,52,45],[55,52,52],[46,33,53],[43,43,54]],
-  'Hoddie_GRP':[[23,26,100],[149,58,182],[13,13,13],[107,29,170]]
+  'Hoddie_GRP':[[23,26,100],[149,58,182],[13,13,13],[107,29,170]],
+  'Mocasin_Izq':[[53,59,92],[69,46,28],[43,53,38],[71,13,21]],
+  'BolsoVelez':[
+    { c1:[86,48,45], c2:[27,20,17] },
+    { c1:[0,0,0],    c2:[0,0,0]   },
+    { c1:[140,93,57],c2:[30,19,14]}
+  ]
 };
 
-function aplicarColor(r,g,b){
+function aplicarColor(r,g,b, r2,g2,b2){
   if(!prendaActiva) return;
-  const color=new THREE.Color(r/255,g/255,b/255);
-  prendaActiva.traverse(n=>{ if(n.isMesh&&GEO_TARGETS.includes(n.name)){ n.material.color.set(color); n.material.needsUpdate=true; }});
+  const color1 = new THREE.Color(r/255,g/255,b/255);
+  const color2 = r2!==undefined ? new THREE.Color(r2/255,g2/255,b2/255) : color1;
+  const esC2 = n => /Cuero_2/i.test(n.name);
+  const pintar = obj => obj.traverse(n=>{
+    if(!n.isMesh) return;
+    if(esTargetColor(n.name)){
+      n.material.color.set(esC2(n) ? color2 : color1);
+      n.material.needsUpdate=true;
+    }
+  });
+  let raiz = prendaActiva;
+  while(raiz.parent && raiz.parent.type !== 'Scene') raiz = raiz.parent;
+  pintar(raiz);
+  if(prendaActiva.name==='Mocasin_Izq'){
+    scene.traverse(n=>{ if(n.name==='Mocasin_Der') pintar(n); });
+  }
 }
 function mostrarPaleta(clave){
   const sec=document.getElementById('color-section');
@@ -399,15 +429,29 @@ function mostrarPaleta(clave){
   const sw=document.getElementById('color-swatches');
   const pal=PALETAS[clave];
   if(!pal){ sec.style.display='none'; return; }
-  tit.textContent=clave==='Hoddie_GRP'?'Hoddie Colors':clave==='Oversize_W'?'Oversize Colors':'BigW Colors';
+  tit.textContent=({Hoddie_GRP:'Hoddie Colors',Oversize_W:'Oversize Colors',BigW:'BigW Colors',Mocasin_Izq:'Mocasin Colors',BolsoVelez:'Bolso Colors'})[clave]||'Colores';
   sw.innerHTML='';
-  pal.forEach(([r,g,b])=>{
-    const btn=document.createElement('div');
-    btn.style.cssText=`width:32px;height:32px;border-radius:6px;background:rgb(${r},${g},${b});cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;`;
-    btn.title=`rgb(${r},${g},${b})`;
-    btn.addEventListener('mouseenter',()=>btn.style.borderColor='rgba(255,255,255,0.6)');
-    btn.addEventListener('mouseleave',()=>btn.style.borderColor='rgba(255,255,255,0.15)');
-    btn.addEventListener('click',()=>aplicarColor(r,g,b));
+  const esBolso = Array.isArray(pal[0]) === false;
+  pal.forEach((entry,i)=>{
+    const btn = document.createElement('div');
+    if(esBolso){
+      // Swatch partido: mitad c1, mitad c2
+      const [r1,g1,b1] = entry.c1;
+      const [r2,g2,b2] = entry.c2;
+      btn.style.cssText=`width:32px;height:32px;border-radius:6px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;display:flex;`;
+      btn.innerHTML=`<div style="flex:1;background:rgb(${r1},${g1},${b1})"></div><div style="flex:1;background:rgb(${r2},${g2},${b2})"></div>`;
+      btn.title=`rgb(${r1},${g1},${b1}) / rgb(${r2},${g2},${b2})`;
+      btn.addEventListener('mouseenter',()=>btn.style.borderColor='rgba(255,255,255,0.6)');
+      btn.addEventListener('mouseleave',()=>btn.style.borderColor='rgba(255,255,255,0.15)');
+      btn.addEventListener('click',()=>aplicarColor(r1,g1,b1,r2,g2,b2));
+    } else {
+      const [r,g,b]=entry;
+      btn.style.cssText=`width:32px;height:32px;border-radius:6px;background:rgb(${r},${g},${b});cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;`;
+      btn.title=`rgb(${r},${g},${b})`;
+      btn.addEventListener('mouseenter',()=>btn.style.borderColor='rgba(255,255,255,0.6)');
+      btn.addEventListener('mouseleave',()=>btn.style.borderColor='rgba(255,255,255,0.15)');
+      btn.addEventListener('click',()=>aplicarColor(r,g,b));
+    }
     sw.appendChild(btn);
   });
   sec.style.display='block';
@@ -420,7 +464,7 @@ const gltfLoader=new THREE.GLTFLoader(); gltfLoader.setDRACOLoader(dracoLoader);
 
 // ── Estado prendas ─────────────────────────────────────────────────────────────
 let vestierRoot=null;
-const PRENDAS=['Hoddie_GRP','Oversize_W','BigW'];
+const PRENDAS=['Hoddie_GRP','Oversize_W','BigW','Mocasin_Izq','BolsoVelez'];
 let prendaActiva=null, posOriginalLocal=new THREE.Vector3(), rotOriginalLocal=new THREE.Quaternion();
 let animando=false, modoDetalle=false, lastTapTime=0, lastTapObj=null;
 let centroPrendaMundo=new THREE.Vector3(), posDestinoLocal=new THREE.Vector3();
@@ -518,15 +562,24 @@ renderer.domElement.addEventListener('pointerup', e=>{
 camera.updateMatrixWorld();
 const camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
 camDir.y = 0; camDir.normalize();
-const intermedio = posOriginalLocal.clone().addScaledVector(camDir, posOriginalLocal.distanceTo(dest) * -0.3);
-animarHacia(prendaActiva, intermedio, 280, ()=>{
-  animarHacia(prendaActiva, dest, 480, ()=>{
+if (clave === 'Oversize_W' || clave === 'Mocasin_Izq' || clave === 'BolsoVelez') {
+  animarHacia(prendaActiva, dest, 600, ()=>{
     animando=false; controls.enabled=false; hintEl.classList.add('visible');
     mostrarPaleta(clave);
     posDestinoLocal=prendaActiva.position.clone();
     new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
   });
-});
+} else {
+  const intermedio = posOriginalLocal.clone().addScaledVector(camDir, posOriginalLocal.distanceTo(dest) * -0.08);
+  animarHacia(prendaActiva, intermedio, 450, ()=>{
+    animarHacia(prendaActiva, dest, 700, ()=>{
+      animando=false; controls.enabled=false; hintEl.classList.add('visible');
+      mostrarPaleta(clave);
+      posDestinoLocal=prendaActiva.position.clone();
+      new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
+    });
+  });
+}
   }
 });
 
@@ -583,6 +636,74 @@ cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitche
 cargarPrenda('Models/Maniqui_Oversize_W.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_Hoddie.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_BigW.glb', [], new THREE.Color(1,1,1));
+
+const COLOR_INICIAL_MOCASIN = new THREE.Color(53/255,59/255,92/255);
+const COLOR_INICIAL_BOLSO_C1 = new THREE.Color(86/255,48/255,45/255);
+const COLOR_INICIAL_BOLSO_C2 = new THREE.Color(27/255,20/255,17/255);
+
+function pintarInicial(obj, tipo){
+  obj.traverse(n=>{
+    if(!n.isMesh || !esTargetColor(n.name)) return;
+    if(tipo === 'bolso'){
+      const esC2 = /Cuero_2/i.test(n.name);
+      n.material.color.copy(esC2 ? COLOR_INICIAL_BOLSO_C2 : COLOR_INICIAL_BOLSO_C1);
+    } else {
+      n.material.color.copy(COLOR_INICIAL_MOCASIN);
+    }
+    n.material.needsUpdate=true;
+  });
+}
+
+gltfLoader.load('Models/Mocasin_Izq.glb', gltf=>{
+  const wrapper = new THREE.Group();
+  wrapper.name = 'Mocasin_Izq';
+  wrapper.add(gltf.scene);
+  scene.add(wrapper);
+  gltf.scene.traverse(n=>{
+    console.log('[Mocasin] nodo:', n.name);
+    if(n.isMesh){
+      n.material = n.material.clone();
+      n.material.metalness = 0; n.material.roughness = 0.85; n.material.envMapIntensity = 0.3;
+      if(n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate = true;
+    }
+  });
+  pintarInicial(wrapper);
+}, undefined, e=>console.error('[Mocasin_Izq]', e));
+
+gltfLoader.load('Models/Mocasin_Der.glb', gltf=>{
+  const wrapper = new THREE.Group();
+  wrapper.name = 'Mocasin_Der';
+  wrapper.add(gltf.scene);
+  scene.add(wrapper);
+  gltf.scene.traverse(n=>{
+    console.log('[Mocasin] nodo:', n.name);
+    if(n.isMesh){
+      n.material = n.material.clone();
+      n.material.metalness = 0; n.material.roughness = 0.85; n.material.envMapIntensity = 0.3;
+      if(n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate = true;
+    }
+  });
+  pintarInicial(wrapper);
+}, undefined, e=>console.error('[BolsoVelez]', e));
+
+gltfLoader.load('Models/BolsoVelez.glb', gltf=>{
+  const wrapper = new THREE.Group();
+  wrapper.name = 'BolsoVelez';
+  wrapper.add(gltf.scene);
+  scene.add(wrapper);
+  gltf.scene.traverse(n=>{
+    console.log('[BolsoVelez] nodo:', n.name);
+    if(n.isMesh){
+      n.material = n.material.clone();
+      n.material.metalness = 0; n.material.roughness = 0.85; n.material.envMapIntensity = 0.3;
+      if(n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+      n.material.needsUpdate = true;
+    }
+  });
+  pintarInicial(wrapper, 'bolso');
+}, undefined, e=>console.error('[BolsoVelez]', e));
 // ══════════════════════════════════════════════════════════════════════════════
 //  PIPELINE AO — render separado de prendas → mapa AO → canvas 2D overlay
 // ══════════════════════════════════════════════════════════════════════════════
