@@ -393,21 +393,21 @@ document.getElementById('nichos-intensidad').addEventListener('input', e=>{
 const GEO_TARGETS=['oversize_base_GEO','oversize_stitches_GEO','hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO','BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'];
 const esTargetColor = n => GEO_TARGETS.includes(n) || /Cuero_GEO|Stitches_GEO|Tela_GEO|Cuero_1_GEO|Cuero_2_GEO/.test(n);
 const PALETAS={
-  'Oversize_W':[[13,13,13],[38,9,93],[24,20,17],[52,43,64]],
-  'BigW':[[51,52,45],[55,52,52],[46,33,53],[43,43,54]],
-  'Hoddie_GRP':[[23,26,100],[149,58,182],[13,13,13],[107,29,170]],
-  'Mocasin_Izq':[[53,59,92],[69,46,28],[43,53,38],[71,13,21]],
-  'BolsoVelez':[
-    { c1:[86,48,45], c2:[27,20,17] },
-    { c1:[0,0,0],    c2:[0,0,0]   },
-    { c1:[140,93,57],c2:[30,19,14]}
+  'Oversize_W':[[30,30,30],[60,20,140],[45,38,32],[80,65,95]],
+  'BigW':[[78,80,70],[85,80,80],[72,52,82],[67,67,84]],
+  'Hoddie_GRP':[[40,45,150],[190,80,220],[30,30,30],[155,45,220]],
+  'Mocasin_Izq':[[80,88,135],[105,70,44],[66,82,58],[108,22,34]],
+'BolsoVelez':[
+    { c1:[107,60,56], c2:[34,25,21] },
+    { c1:[90,90,90], c2:[60,60,60] },
+    { c1:[175,116,71],c2:[38,24,18] }
   ]
 };
 
 function aplicarColor(r,g,b, r2,g2,b2){
   if(!prendaActiva) return;
-  const color1 = new THREE.Color(r/255,g/255,b/255);
-  const color2 = r2!==undefined ? new THREE.Color(r2/255,g2/255,b2/255) : color1;
+const color1 = new THREE.Color(r/255,g/255,b/255).convertSRGBToLinear();
+const color2 = r2!==undefined ? new THREE.Color(r2/255,g2/255,b2/255).convertSRGBToLinear() : color1;
   const esC2 = n => /Cuero_2/i.test(n.name);
   const pintar = obj => obj.traverse(n=>{
     if(!n.isMesh) return;
@@ -630,16 +630,16 @@ function cargarPrenda(path,names,color){ gltfLoader.load(path, gltf=>{
   }});
 }, undefined, e=>console.error(`[${path}]`,e)); }
 
-cargarPrenda('Models/Hoddie.glb', ['hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO'], new THREE.Color(23/255,26/255,100/255));
-cargarPrenda('Models/Oversize_W.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(13/255,13/255,13/255));
-cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'], new THREE.Color(51/255,52/255,45/255));
+cargarPrenda('Models/Hoddie.glb', ['hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO'], new THREE.Color(40/255,45/255,150/255).convertSRGBToLinear());
+cargarPrenda('Models/Oversize_W.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(30/255,30/255,30/255).convertSRGBToLinear());
+cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'], new THREE.Color(78/255,80/255,70/255).convertSRGBToLinear());
 cargarPrenda('Models/Maniqui_Oversize_W.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_Hoddie.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_BigW.glb', [], new THREE.Color(1,1,1));
 
-const COLOR_INICIAL_MOCASIN = new THREE.Color(53/255,59/255,92/255);
-const COLOR_INICIAL_BOLSO_C1 = new THREE.Color(86/255,48/255,45/255);
-const COLOR_INICIAL_BOLSO_C2 = new THREE.Color(27/255,20/255,17/255);
+const COLOR_INICIAL_MOCASIN = new THREE.Color(53/255,59/255,92/255).convertSRGBToLinear();
+const COLOR_INICIAL_BOLSO_C1 = new THREE.Color(86/255,48/255,45/255).convertSRGBToLinear();
+const COLOR_INICIAL_BOLSO_C2 = new THREE.Color(27/255,20/255,17/255).convertSRGBToLinear();
 
 function pintarInicial(obj, tipo){
   obj.traverse(n=>{
