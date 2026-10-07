@@ -109,6 +109,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
       Colores
     </h3>
     <div id="color-swatches" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+
+<div id="logo-section" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.06); padding-top:8px;">
+  <h3 style="margin:0 0 8px 0; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Logos</h3>
+  <div id="logo-swatches" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+</div>
   </div>
 </div>
 
@@ -393,7 +398,7 @@ document.getElementById('nichos-intensidad').addEventListener('input', e=>{
 const GEO_TARGETS=['oversize_base_GEO','oversize_stitches_GEO','hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO','BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'];
 const esTargetColor = n => GEO_TARGETS.includes(n) || /Cuero_GEO|Stitches_GEO|Tela_GEO|Cuero_1_GEO|Cuero_2_GEO/.test(n);
 const PALETAS={
-  'Oversize_W':[[30,30,30],[60,20,140],[45,38,32],[80,65,95]],
+  'Oversize_W':[[30,30,30],[111,107,86],[103,64,52],[102,10,30]],
   'BigW':[[78,80,70],[85,80,80],[72,52,82],[67,67,84]],
   'Hoddie_GRP':[[40,45,150],[190,80,220],[30,30,30],[155,45,220]],
   'Mocasin_Izq':[[80,88,135],[105,70,44],[66,82,58],[108,22,34]],
@@ -423,6 +428,58 @@ const color2 = r2!==undefined ? new THREE.Color(r2/255,g2/255,b2/255).convertSRG
     scene.traverse(n=>{ if(n.name==='Mocasin_Der') pintar(n); });
   }
 }
+const LOGOS = [
+  { nombre:'Chevignon', path:'Logos/Chevignon-emblem-1.png' },
+  { nombre:'Medellin',  path:'Logos/Medellin.png' },
+  { nombre:'Superman',  path:'Logos/Superman.png' },
+];
+
+function aplicarLogo(path) {
+  if (!meshLogoOversize) return;
+  if (!path) {
+    meshLogoOversize.material.map = texturaOriginalOversize;
+  } else {
+    new THREE.TextureLoader().load(path, tex => {
+      tex.encoding = THREE.sRGBEncoding;
+      tex.flipY = false;
+      meshLogoOversize.material.map = tex;
+      meshLogoOversize.material.needsUpdate = true;
+    });
+  }
+  meshLogoOversize.material.needsUpdate = true;
+}
+
+function mostrarLogos() {
+  const sw = document.getElementById('logo-swatches');
+  sw.innerHTML = '';
+
+  LOGOS.forEach(logo => {
+    const btn = document.createElement('div');
+    btn.style.cssText = `width:40px;height:40px;border-radius:6px;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;background:#111;`;
+    const img = document.createElement('img');
+    img.src = logo.path;
+    img.style.cssText = `width:100%;height:100%;object-fit:contain;padding:2px;`;
+    img.title = logo.nombre;
+    btn.appendChild(img);
+    btn.addEventListener('mouseenter', () => btn.style.borderColor = 'rgba(255,255,255,0.6)');
+    btn.addEventListener('mouseleave', () => btn.style.borderColor = 'rgba(255,255,255,0.15)');
+    btn.addEventListener('click', () => aplicarLogo(logo.path));
+    sw.appendChild(btn);
+  });
+
+  // Botón reset (✕)
+  const reset = document.createElement('div');
+  reset.style.cssText = `width:40px;height:40px;border-radius:6px;cursor:pointer;border:2px solid rgba(255,255,255,0.15);transition:border-color 0.2s;background:#111;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;`;
+  reset.textContent = '✕';
+  reset.title = 'Logo original';
+  reset.addEventListener('mouseenter', () => reset.style.borderColor = 'rgba(255,255,255,0.6)');
+  reset.addEventListener('mouseleave', () => reset.style.borderColor = 'rgba(255,255,255,0.15)');
+  reset.addEventListener('click', () => aplicarLogo(null));
+  sw.appendChild(reset);
+
+  document.getElementById('logo-section').style.display = 'block';
+}
+
 function mostrarPaleta(clave){
   const sec=document.getElementById('color-section');
   const tit=document.getElementById('color-titulo');
@@ -455,6 +512,9 @@ function mostrarPaleta(clave){
     sw.appendChild(btn);
   });
   sec.style.display='block';
+document.getElementById('logo-section').style.display = clave === 'Oversize_W' ? 'none' : 'none';
+if (clave === 'Oversize_W') mostrarLogos();
+else document.getElementById('logo-section').style.display = 'none';
 }
 
 // ── Loaders ────────────────────────────────────────────────────────────────────
@@ -631,12 +691,30 @@ function cargarPrenda(path,names,color){ gltfLoader.load(path, gltf=>{
 }, undefined, e=>console.error(`[${path}]`,e)); }
 
 cargarPrenda('Models/Hoddie.glb', ['hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO'], new THREE.Color(40/255,45/255,150/255).convertSRGBToLinear());
-cargarPrenda('Models/Oversize_W.glb', ['oversize_base_GEO','oversize_stitches_GEO'], new THREE.Color(30/255,30/255,30/255).convertSRGBToLinear());
 cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'], new THREE.Color(78/255,80/255,70/255).convertSRGBToLinear());
 cargarPrenda('Models/Maniqui_Oversize_W.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_Hoddie.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_BigW.glb', [], new THREE.Color(1,1,1));
 
+gltfLoader.load('Models/Oversize_W.glb', gltf => {
+  const root = gltf.scene; scene.add(root);
+  root.traverse(n => {
+    if (!n.isMesh) return;
+    n.material = n.material.clone();
+    n.material.metalness = 0; n.material.roughness = 0.85; n.material.envMapIntensity = 0.3;
+    if (n.material.map) n.material.map.encoding = THREE.sRGBEncoding;
+    if (['oversize_base_GEO','oversize_stitches_GEO'].includes(n.name))
+      n.material.color.set(new THREE.Color(30/255,30/255,30/255).convertSRGBToLinear());
+    if (n.name === 'PersonalizationFront_GEO') {
+      meshLogoOversize = n;
+      texturaOriginalOversize = n.material.map;
+    }
+    n.material.needsUpdate = true;
+  });
+}, undefined, e => console.error('[Oversize_W]', e));
+
+let texturaOriginalOversize = null;
+let meshLogoOversize = null;
 const COLOR_INICIAL_MOCASIN = new THREE.Color(53/255,59/255,92/255).convertSRGBToLinear();
 const COLOR_INICIAL_BOLSO_C1 = new THREE.Color(86/255,48/255,45/255).convertSRGBToLinear();
 const COLOR_INICIAL_BOLSO_C2 = new THREE.Color(27/255,20/255,17/255).convertSRGBToLinear();
