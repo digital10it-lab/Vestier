@@ -114,6 +114,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1a1a; }
   <h3 style="margin:0 0 8px 0; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Logos</h3>
   <div id="logo-swatches" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
 </div>
+
+<div id="manos-section" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px;">
+  <button id="btn-abrir-manos" style="
+    width:100%; padding:7px 0; border-radius:8px; border:none; cursor:pointer;
+    background:#ffffff18; color:#ddd; font-family:'Segoe UI',sans-serif;
+    font-size:12px; font-weight:600; letter-spacing:0.5px;
+    transition:background 0.2s;">Abrir</button>
+</div>
   </div>
 </div>
 
@@ -396,7 +404,7 @@ document.getElementById('nichos-intensidad').addEventListener('input', e=>{
   luzNichosLights.forEach(l => l.intensity = v);
 });
 const GEO_TARGETS=['oversize_base_GEO','oversize_stitches_GEO','hoddie_GEO','hoddie__stitchesBase_GEO','stitchesHood_GEO','BigW_base_GEO','BigW_stitches_M','BigW_stitchesButton_M'];
-const esTargetColor = n => GEO_TARGETS.includes(n) || /Cuero_GEO|Stitches_GEO|Tela_GEO|Cuero_1_GEO|Cuero_2_GEO/.test(n);
+const esTargetColor = n => GEO_TARGETS.includes(n) || /Cuero_GEO|Stitches_GEO|Tela_GEO|Cuero_1_GEO|Cuero_2_GEO|ManosLibres_Cuero_GEO|ManosLibres_Interior_GEO|ManosLibres_Plastico_GEO|ManosLibres_Stitches_GEO/.test(n);
 const PALETAS={
   'Oversize_W':[[30,30,30],[111,107,86],[103,64,52],[102,10,30]],
   'BigW':[[78,80,70],[85,80,80],[72,52,82],[67,67,84]],
@@ -406,6 +414,13 @@ const PALETAS={
     { c1:[107,60,56], c2:[34,25,21] },
     { c1:[90,90,90], c2:[60,60,60] },
     { c1:[175,116,71],c2:[38,24,18] }
+  ],
+'ManosLibres1_GRP':[
+    [74,  82,  64 ],   // Verde oliva  #4a5240
+    [232, 224, 208],   // Crema        #e8e0d0
+    [139, 107, 74 ],   // Tabaco       #8b6b4a
+    [26,  26,  26 ],   // Negro        #1a1a1a
+    [196, 133, 58 ]    // Miel         #c4853a
   ]
 };
 
@@ -487,10 +502,11 @@ function mostrarPaleta(clave){
   const sec=document.getElementById('color-section');
   const tit=document.getElementById('color-titulo');
   const sw=document.getElementById('color-swatches');
-const palClave = clave === 'Mocasin_Der' ? 'Mocasin_Izq' : clave;
+const palClave = clave === 'Mocasin_Der' ? 'Mocasin_Izq' : clave === 'HIT_ManosLibres' ? 'ManosLibres1_GRP' : clave;
 const pal=PALETAS[palClave];
   if(!pal){ sec.style.display='none'; return; }
-  tit.textContent=({Hoddie_GRP:'Hoddie Colors',Oversize_W:'Oversize Colors',BigW:'BigW Colors',Mocasin_Izq:'Mocasin Colors',Mocasin_Der:'Mocasin Colors',BolsoVelez:'Bolso Colors'})[clave]||'Colores';
+   const claveDisplay = clave === 'HIT_ManosLibres' ? 'ManosLibres1_GRP' : clave;
+tit.textContent=({Hoddie_GRP:'Hoddie Colors',Oversize_W:'Oversize Colors',BigW:'BigW Colors',Mocasin_Izq:'Mocasin Colors',Mocasin_Der:'Mocasin Colors',BolsoVelez:'Bolso Colors','ManosLibres1_GRP':'Manos Libres Colors'})[claveDisplay]||'Colores';
   sw.innerHTML='';
   const esBolso = Array.isArray(pal[0]) === false;
   pal.forEach((entry,i)=>{
@@ -519,7 +535,40 @@ const pal=PALETAS[palClave];
 document.getElementById('logo-section').style.display = clave === 'Oversize_W' ? 'none' : 'none';
 if (clave === 'Oversize_W') mostrarLogos();
 else document.getElementById('logo-section').style.display = 'none';
+
+document.getElementById('manos-section').style.display = (clave === 'HIT_ManosLibres' || clave === 'ManosLibres1_GRP') ? 'block' : 'none';
+document.getElementById('btn-abrir-manos').textContent = manosAbierto ? 'Cerrar' : 'Abrir';
 }
+// ── Botón Abrir / Cerrar ManosLibres ─────────────────────────────────────────
+let manosAbierto = false;
+
+document.getElementById('btn-abrir-manos').addEventListener('click', () => {
+  const grpManos = scene.getObjectByName('ManosLibres1_GRP');
+  if (!grpManos?.userData.animAction || !mixerManosLibres) return;
+
+  const a   = grpManos.userData.animAction;
+  const dur = grpManos.userData.animDur;
+
+  if (!manosAbierto) {
+    // Abrir: 0 → 22
+    manosAbierto = true;
+    document.getElementById('btn-abrir-manos').textContent = 'Cerrar';
+    a.timeScale = 1;
+    a.time = 0;
+    a.paused = false;
+    a.play();
+  } else {
+    // Cerrar: 22 → 0
+    manosAbierto = false;
+    document.getElementById('btn-abrir-manos').textContent = 'Abrir';
+    a.timeScale = -1;
+    a.time = manosAbierto ? dur : a.time; // si está cerrado, retrocede desde donde esté
+    a.paused = false;
+    a.play();
+    manosAbierto = false;
+    document.getElementById('btn-abrir-manos').textContent = 'Abrir';
+  }
+});
 
 // ── Loaders ────────────────────────────────────────────────────────────────────
 const dracoLoader=new THREE.DRACOLoader();
@@ -528,11 +577,12 @@ const gltfLoader=new THREE.GLTFLoader(); gltfLoader.setDRACOLoader(dracoLoader);
 
 // ── Estado prendas ─────────────────────────────────────────────────────────────
 let vestierRoot=null;
-const PRENDAS=['Hoddie_GRP','Oversize_W','BigW','Mocasin_Izq','Mocasin_Der','BolsoVelez'];
+const PRENDAS = ['Hoddie_GRP','Oversize_W','BigW','Mocasin_Izq','Mocasin_Der','BolsoVelez','ManosLibres1_GRP','HIT_ManosLibres'];
 let prendaActiva=null, posOriginalLocal=new THREE.Vector3(), rotOriginalLocal=new THREE.Quaternion();
 let animando=false, modoDetalle=false, lastTapTime=0, lastTapObj=null;
 let centroPrendaMundo=new THREE.Vector3(), posDestinoLocal=new THREE.Vector3();
 const hintEl=document.getElementById('hint');
+let hitboxManosLibres = null;
 
 function animarHacia(obj,dest,dur,onDone,rotDest){
   const p0=obj.position.clone(), r0=obj.quaternion.clone().normalize();
@@ -598,7 +648,32 @@ renderer.domElement.addEventListener('pointerup', e=>{
   mouse.y=-(e.clientY/window.innerHeight)*2+1;
   raycaster.setFromCamera(mouse,camera);
   const hits=raycaster.intersectObjects(scene.children.filter(o=>o!==fondoDome),true);
-  if(!hits.length) return;
+if(!hits.length){
+  if(modoDetalle){
+    const ahora2=Date.now();
+    if(lastTapObj===null && (ahora2-lastTapTime)<500){
+      // doble tap en vacío mientras hay prenda activa → regresar
+      lastTapTime=0; lastTapObj=null;
+      if(animando) return;
+      animando=true; controls.enabled=false; hintEl.classList.remove('visible');
+      prendaActiva.quaternion.copy(rotOriginalLocal);
+      prendaActiva.position.copy(posDestinoLocal);
+animarHacia(prendaActiva,posOriginalLocal,500,()=>{
+  modoDetalle=false; animando=false; prendaActiva=null;
+  document.getElementById('color-section').style.display='none';
+  document.getElementById('manos-section').style.display='none';
+const grpM = scene.getObjectByName('ManosLibres1_GRP');
+if(grpM?.userData.animAction){ grpM.userData.animAction.stop(); grpM.userData.animAction.time=0; }
+manosAbierto=false;
+document.getElementById('btn-abrir-manos').textContent='Abrir';
+if(hitboxManosLibres) hitboxManosLibres.position.set(-1.8, 1, -3.8);
+},rotOriginalLocal);
+    } else {
+      lastTapTime=ahora2; lastTapObj=null;
+    }
+  }
+  return;
+}
   let nodo=hits[0].object, clave=null;
   while(nodo){ if(PRENDAS.includes(nodo.name)){ clave=nodo.name; break; } nodo=nodo.parent; }
 // sin redirección
@@ -606,33 +681,54 @@ renderer.domElement.addEventListener('pointerup', e=>{
   const doble=(clave===lastTapObj)&&(ahora-lastTapTime<500);
   lastTapTime=ahora; lastTapObj=clave;
   if(animando) return;
-  if(doble&&modoDetalle&&prendaActiva?.name===clave){
+  const claveReal = clave === 'HIT_ManosLibres' ? 'ManosLibres1_GRP' : clave;
+if(doble&&modoDetalle){
     animando=true; controls.enabled=false; hintEl.classList.remove('visible');
     prendaActiva.quaternion.copy(rotOriginalLocal);
     prendaActiva.position.copy(posDestinoLocal);
-    animarHacia(prendaActiva,posOriginalLocal,500,()=>{
-      modoDetalle=false; animando=false; controls.enabled=false; prendaActiva=null;
-      document.getElementById('color-section').style.display='none';
-    },rotOriginalLocal);
+animarHacia(prendaActiva,posOriginalLocal,500,()=>{
+  modoDetalle=false; animando=false; controls.enabled=false; prendaActiva=null;
+  document.getElementById('color-section').style.display='none';
+  document.getElementById('manos-section').style.display='none';  // ← agregar
+const grpM = scene.getObjectByName('ManosLibres1_GRP');
+if(grpM?.userData.animAction){ grpM.userData.animAction.stop(); grpM.userData.animAction.time=0; }
+manosAbierto=false;
+document.getElementById('btn-abrir-manos').textContent='Abrir';
+if(hitboxManosLibres) hitboxManosLibres.position.set(-1.8, 1, -3.8);
+},rotOriginalLocal);
     return;
   }
-  if(!modoDetalle){
-    scene.traverse(n=>{ if(n.name===clave) prendaActiva=n; });
+if(!modoDetalle){
+    const buscarNombre = clave === 'HIT_ManosLibres' ? 'ManosLibres1_GRP' : clave;
+    scene.traverse(n=>{ if(n.name===buscarNombre) prendaActiva=n; });
     if(!prendaActiva) return;
     posOriginalLocal.copy(prendaActiva.position);
     rotOriginalLocal.copy(prendaActiva.quaternion);
-    const dest=getDestinoLocal(prendaActiva);
+let dest;
+if (clave === 'HIT_ManosLibres') {
+  camera.updateMatrixWorld();
+  // Posición frente a la cámara donde queremos que quede el centro visual
+  const frenteCamara = new THREE.Vector3(0, -0.1, -1.75).applyMatrix4(camera.matrixWorld);
+  // El offset entre el grp y la hitbox (centro visual real)
+  const offsetGrpAHitbox = new THREE.Vector3(-1.8, 1, -3.8).sub(prendaActiva.position);
+  // El destino del grp es la posición frente a cámara menos ese offset
+  dest = frenteCamara.clone().sub(offsetGrpAHitbox);
+} else {
+  dest = getDestinoLocal(prendaActiva);
+}
     modoDetalle=true; animando=true; controls.enabled=false;
 camera.updateMatrixWorld();
 const camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
 camDir.y = 0; camDir.normalize();
-if (clave === 'Oversize_W' || clave === 'Mocasin_Izq' || clave === 'Mocasin_Der' || clave === 'BolsoVelez') {
-  animarHacia(prendaActiva, dest, 600, ()=>{
-    animando=false; controls.enabled=false; hintEl.classList.add('visible');
-    mostrarPaleta(clave);
-    posDestinoLocal=prendaActiva.position.clone();
-    new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
-  });
+if (clave === 'Oversize_W' || clave === 'Mocasin_Izq' || clave === 'Mocasin_Der' || clave === 'BolsoVelez' || clave === 'HIT_ManosLibres') {
+animarHacia(prendaActiva, dest, 600, ()=>{
+  animando=false; controls.enabled=false; hintEl.classList.add('visible');
+  mostrarPaleta(clave);
+  posDestinoLocal=prendaActiva.position.clone();
+  new THREE.Box3().setFromObject(prendaActiva).getCenter(centroPrendaMundo);
+  if(hitboxManosLibres) hitboxManosLibres.position.set(0, -999, 0);
+
+});
 } else {
   const intermedio = posOriginalLocal.clone().addScaledVector(camDir, posOriginalLocal.distanceTo(dest) * -0.08);
   animarHacia(prendaActiva, intermedio, 450, ()=>{
@@ -699,6 +795,62 @@ cargarPrenda('Models/BigW.glb', ['BigW_base_GEO','BigW_stitches_M','BigW_stitche
 cargarPrenda('Models/Maniqui_Oversize_W.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_Hoddie.glb', [], new THREE.Color(1,1,1));
 cargarPrenda('Models/Maniqui_BigW.glb', [], new THREE.Color(1,1,1));
+
+let mixerManosLibres = null;
+
+gltfLoader.load('Models/ManosLibres.glb', gltf => {
+  const grp = gltf.scene.getObjectByName('ManosLibre_GRP');
+  grp.name = 'ManosLibres1_GRP';
+
+  const DESTINO_X = -1.8;
+  const DESTINO_Y = 1;
+  const DESTINO_Z = -3.8;
+
+  const box = new THREE.Box3().setFromObject(grp);
+  const center = box.getCenter(new THREE.Vector3());
+
+  grp.position.set(
+    grp.position.x - center.x + DESTINO_X,
+    grp.position.y - center.y + DESTINO_Y,
+    grp.position.z - center.z + DESTINO_Z
+  );
+
+  grp.traverse(n => {
+    if (n.isSkinnedMesh || n.isMesh) {
+      n.frustumCulled = false;
+      n.material = n.material.clone();
+      n.material.metalness = 0;
+      n.material.roughness = 0.85;
+      n.material.envMapIntensity = 0.3;
+      n.material.needsUpdate = true;
+    }
+  });
+
+  scene.add(grp);
+
+  // ── ANIMACIONES ──────────────────────────────────────────────────────────
+  if (gltf.animations && gltf.animations.length > 0) {
+    mixerManosLibres = new THREE.AnimationMixer(grp);
+    const clip   = gltf.animations[0];
+    const action = mixerManosLibres.clipAction(clip);
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.timeScale = 1;
+    action.time = 0;
+    grp.userData.animAction = action;
+    grp.userData.animDur    = clip.duration;
+  }
+
+  const hitbox = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.5, 0.4),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  hitbox.name = 'HIT_ManosLibres';
+  hitbox.position.set(DESTINO_X, DESTINO_Y, DESTINO_Z);
+  hitboxManosLibres = hitbox;
+  scene.add(hitbox);
+}, undefined, e => console.error('[ManosLibres]', e));
+
 
 gltfLoader.load('Models/Oversize_W.glb', gltf => {
   const root = gltf.scene; scene.add(root);
@@ -997,17 +1149,17 @@ function renderAO() {
   }
 }
 
+const clock = new THREE.Clock();  // ← agregar aquí
+
 // ── Loop de render ─────────────────────────────────────────────────────────────
 (function animate(){
   requestAnimationFrame(animate);
+  const delta = clock.getDelta();          // ← agregar
+  if(mixerManosLibres) mixerManosLibres.update(delta); // ← agregar
   camera.updateMatrixWorld();
   if(fondoDome) fondoDome.position.copy(camera.position);
-
-  // Render principal normal (sin tocar el pipeline)
   renderer.setRenderTarget(null);
   renderer.render(scene, camera);
-
-  // AO encima
   if(aoState.enabled) renderAO();
   else if(aoCanvas.style.display !== 'none') aoCanvas.style.display='none';
 })();
